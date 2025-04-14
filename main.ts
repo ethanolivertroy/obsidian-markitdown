@@ -87,6 +87,92 @@ export default class MarkitdownPlugin extends Plugin {
 			}
 		});
 
+		
+    // Register file menu event handler for context menu
+    this.registerEvent(
+		this.app.workspace.on('file-menu', (menu, file) => {
+			 // Only show for files, not folders
+			 if (!(file instanceof TFile)) return;
+			 
+			 // Get file extension
+			 const extension = file.extension.toLowerCase();
+			 
+			 // List of supported extensions
+			 const supportedExtensions = ['pdf', 'docx', 'pptx', 'xlsx', 'xls', 
+				  'html', 'htm', 'txt', 'csv', 'json', 'xml', 
+				  'jpg', 'jpeg', 'png', 'gif', 'wav', 'mp3', 'zip'];
+			 
+			 // Only show for supported file types
+			 if (!supportedExtensions.includes(extension)) return;
+			 
+			 menu.addItem((item) => {
+				  item
+						.setTitle('Convert to Markdown with Markitdown')
+						.setIcon('file-text')
+						.onClick(async () => {
+							 if (!this.markitdownInstalled) {
+								  new MarkitdownSetupModal(this.app, this).open();
+								  return;
+							 }
+							 
+							 try {
+								  // Get vault path
+								  let vaultPath = '';
+								  if (this.app.vault.adapter instanceof FileSystemAdapter) {
+										vaultPath = this.app.vault.adapter.getBasePath();
+								  }
+								  
+								  if (!vaultPath) {
+										new Notice('Could not determine vault path. This plugin requires a local vault.');
+										return;
+								  }
+								  
+								  // Get file path
+								  const filePath = path.join(vaultPath, file.path);
+								  
+								  // Determine output path
+								  let outputFolder = this.settings.outputPath || '';
+								  if (!outputFolder) {
+										outputFolder = path.join(vaultPath, 'markitdown-output');
+										if (!fs.existsSync(outputFolder)) {
+											 fs.mkdirSync(outputFolder, { recursive: true });
+										}
+								  } else {
+										outputFolder = path.join(vaultPath, outputFolder);
+										if (!fs.existsSync(outputFolder)) {
+											 fs.mkdirSync(outputFolder, { recursive: true });
+										}
+								  }
+								  
+								  // Create output filename
+								  const baseName = path.basename(file.path, path.extname(file.path));
+								  const outputPath = path.join(outputFolder, `${baseName}.md`);
+								  
+								  new Notice('Converting file...');
+								  
+								  // Convert the file
+								  await this.convertFile(filePath, outputPath);
+								  
+								  // Refresh the vault to see the new file
+								  await this.app.vault.adapter.exists(outputPath);
+								  
+								  new Notice(`File converted and saved to ${outputPath}`);
+								  
+								  // Try to open the converted file
+								  const relativePath = path.relative(vaultPath, outputPath).replace(/\\/g, '/');
+								  const existingFile = this.app.vault.getAbstractFileByPath(relativePath);
+								  if (existingFile instanceof TFile) {
+										this.app.workspace.getLeaf().openFile(existingFile);
+								  }
+							 } catch (error) {
+								  console.error('Error during conversion:', error);
+								  new Notice(`Error: ${error.message}`);
+							 }
+						});
+				});
+			})
+		);
+
 		// Add settings tab
 		this.addSettingTab(new MarkitdownSettingTab(this.app, this));
 	}
