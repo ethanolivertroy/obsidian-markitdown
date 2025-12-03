@@ -30,6 +30,7 @@ interface AppWithSetting extends App {
 interface MarkitdownSettings {
 	pythonPath: string;
 	enablePlugins: boolean;
+	pluginArgs: string;
 	docintelEndpoint: string;
 	outputPath: string;
 }
@@ -37,6 +38,7 @@ interface MarkitdownSettings {
 const DEFAULT_SETTINGS: MarkitdownSettings = {
 	pythonPath: 'python',
 	enablePlugins: false,
+	pluginArgs: '{}',
 	docintelEndpoint: '',
 	outputPath: ''
 }
@@ -136,31 +138,64 @@ export default class MarkitdownPlugin extends Plugin {
 
 	async convertFile(filePath: string, outputPath: string): Promise<string> {
 		return new Promise((resolve, reject) => {
-			// Build a command that uses the markitdown CLI syntax
-			// According to the error message, markitdown just takes a filename as argument
-			let command = `markitdown "${filePath}" > "${outputPath}"`;
+			// Parse plugin arguments
+			let pluginArgsObj: Record<string, any> = {};
+			try {
+				if (this.settings.pluginArgs && this.settings.pluginArgs.trim() !== '') {
+					pluginArgsObj = JSON.parse(this.settings.pluginArgs);
+				}
+			} catch (error) {
+				console.error('Failed to parse plugin arguments:', error);
+				reject(new Error('Invalid JSON in plugin arguments setting'));
+				return;
+			}
+
+			// Build argument string for Python
+			const argsString = Object.keys(pluginArgsObj)
+				.map(key => {
+					const value = pluginArgsObj[key];
+					if (typeof value === 'boolean') {
+						return `${key}=${value ? 'True' : 'False'}`;
+					} else if (typeof value === 'string') {
+						return `${key}='${value.replace(/'/g, "\\'")}'`;
+					} else if (typeof value === 'number') {
+						return `${key}=${value}`;
+					}
+					return '';
+				})
+				.filter(s => s !== '')
+				.join(', ');
+
+			// Create Python script to convert file with plugin arguments
+			const pythonScript = `
+import sys
+from markitdown import MarkItDown
+
+try:
+    md = MarkItDown(enable_plugins=${this.settings.enablePlugins ? 'True' : 'False'})
+    result = md.convert('${filePath.replace(/\\/g, '\\\\')}', ${argsString})
+    with open('${outputPath.replace(/\\/g, '\\\\')}', 'w', encoding='utf-8') as f:
+        f.write(result.text_content)
+    sys.exit(0)
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+`;
+
+			// Execute Python script
+			const command = `${this.settings.pythonPath} -c "${pythonScript.replace(/"/g, '\\"')}"`;
 			
-			// Execute as a shell command
-			exec(command, (error, stdout, stderr) => {
+			exec(command, (error: any, stdout: any, stderr: any) => {
 				if (error) {
-					// Try alternative approach with Python module if the first method fails
-					const moduleCommand = `${this.settings.pythonPath} -c "from markitdown import convert; convert('${filePath}', output_file='${outputPath}')"`;
+					// Fallback to basic CLI if Python script fails
+					const fallbackCommand = `${this.settings.pythonPath} -m markitdown "${filePath}" > "${outputPath}"`;
 					
-					exec(moduleCommand, (moduleError, moduleStdout, moduleStderr) => {
-						if (moduleError) {
-							// One last attempt with just a basic command
-							const basicCommand = `${this.settings.pythonPath} -m markitdown "${filePath}" > "${outputPath}"`;
-							
-							exec(basicCommand, (basicError, basicStdout, basicStderr) => {
-								if (basicError) {
-									reject(new Error(`Markitdown failed to convert the file: ${basicError.message}\n${basicStderr}`));
-									return;
-								}
-								resolve(basicStdout);
-							});
+					exec(fallbackCommand, (fallbackError: any, fallbackStdout: any, fallbackStderr: any) => {
+						if (fallbackError) {
+							reject(new Error(`Markitdown failed to convert the file: ${fallbackError.message}\n${stderr || fallbackStderr}`));
 							return;
 						}
-						resolve(moduleStdout);
+						resolve(fallbackStdout);
 					});
 					return;
 				}
@@ -646,6 +681,17 @@ class MarkitdownSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.enablePlugins)
 				.onChange(async (value) => {
 					this.plugin.settings.enablePlugins = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Plugin arguments')
+			.setDesc('JSON object with arguments to pass to plugin converters (e.g., {"add_page_separators": true, "remove_headers_footers": true})')
+			.addTextArea(text => text
+				.setPlaceholder('{}')
+				.setValue(this.plugin.settings.pluginArgs)
+				.onChange(async (value: any) => {
+					this.plugin.settings.pluginArgs = value;
 					await this.plugin.saveSettings();
 				}));
 

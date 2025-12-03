@@ -57,8 +57,36 @@ The plugin settings can be found in the Obsidian settings panel under "Markitdow
 
 - **Python Path**: Specify the path to your Python executable (default: "python")
 - **Enable Markitdown Plugins**: Toggle to enable third-party Markitdown plugins
+- **Plugin Arguments**: JSON object with arguments to pass to plugin converters. This allows you to configure plugin-specific options like page separators, header/footer removal, etc. (default: "{}")
 - **Azure Document Intelligence Endpoint**: Optionally add an Azure Document Intelligence endpoint for improved conversion quality
 - **Output Folder**: Specify where the converted Markdown files should be saved (relative to vault root, default: "markitdown-output")
+
+### Using Plugin Arguments
+
+The **Plugin Arguments** field accepts a JSON object that will be passed to the markitdown converter. This is useful for configuring third-party plugins like [markitdown-pdf-separators](https://pypi.org/project/markitdown-pdf-separators/).
+
+**Example configurations:**
+
+For PDF page separators:
+```json
+{"add_page_separators": true}
+```
+
+For PDF header/footer removal:
+```json
+{"remove_headers_footers": true}
+```
+
+Combine multiple options:
+```json
+{"add_page_separators": true, "remove_headers_footers": true}
+```
+
+**Note:** You must have the relevant plugin installed in your Python environment. For example:
+```bash
+pip install markitdown-pdf-separators
+```
+
 
 ## How it works
 
