@@ -17,6 +17,7 @@ import {
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { exec } from 'child_process';
 
 // Add type for the app with setting property
@@ -150,31 +151,57 @@ export default class MarkitdownPlugin extends Plugin {
 				return;
 			}
 
+			// Helper function to escape strings for Python
+			const escapePythonString = (str: string): string => {
+				return str
+					.replace(/\\/g, '\\\\')
+					.replace(/'/g, "\\'")
+					.replace(/\n/g, '\\n')
+					.replace(/\r/g, '\\r')
+					.replace(/\t/g, '\\t');
+			};
+
+			// Convert JavaScript value to Python literal
+			const toPythonValue = (value: any): string => {
+				if (value === null || value === undefined) {
+					return 'None';
+				} else if (typeof value === 'boolean') {
+					return value ? 'True' : 'False';
+				} else if (typeof value === 'number') {
+					return String(value);
+				} else if (typeof value === 'string') {
+					return `'${escapePythonString(value)}'`;
+				} else if (Array.isArray(value)) {
+					return `[${value.map(toPythonValue).join(', ')}]`;
+				} else if (typeof value === 'object') {
+					const pairs = Object.keys(value).map(k => `'${escapePythonString(k)}': ${toPythonValue(value[k])}`);
+					return `{${pairs.join(', ')}}`;
+				}
+				return 'None';
+			};
+
 			// Build argument string for Python
 			const argsString = Object.keys(pluginArgsObj)
-				.map(key => {
-					const value = pluginArgsObj[key];
-					if (typeof value === 'boolean') {
-						return `${key}=${value ? 'True' : 'False'}`;
-					} else if (typeof value === 'string') {
-						return `${key}='${value.replace(/'/g, "\\'")}'`;
-					} else if (typeof value === 'number') {
-						return `${key}=${value}`;
-					}
-					return '';
-				})
-				.filter(s => s !== '')
+				.map(key => `${key}=${toPythonValue(pluginArgsObj[key])}`)
 				.join(', ');
 
-			// Create Python script to convert file with plugin arguments
-			const pythonScript = `
-import sys
+			// Create a temporary Python script file
+			const tempScriptPath = path.join(os.tmpdir(), `markitdown_convert_${Date.now()}.py`);
+			
+			// Create Python script content with properly escaped paths
+			const pythonScript = `import sys
+import os
 from markitdown import MarkItDown
 
+# Read arguments from environment variables for security
+input_file = os.environ.get('MARKITDOWN_INPUT_FILE', '')
+output_file = os.environ.get('MARKITDOWN_OUTPUT_FILE', '')
+enable_plugins = os.environ.get('MARKITDOWN_ENABLE_PLUGINS', 'False') == 'True'
+
 try:
-    md = MarkItDown(enable_plugins=${this.settings.enablePlugins ? 'True' : 'False'})
-    result = md.convert('${filePath.replace(/\\/g, '\\\\')}', ${argsString})
-    with open('${outputPath.replace(/\\/g, '\\\\')}', 'w', encoding='utf-8') as f:
+    md = MarkItDown(enable_plugins=enable_plugins)
+    result = md.convert(input_file${argsString ? ', ' + argsString : ''})
+    with open(output_file, 'w', encoding='utf-8') as f:
         f.write(result.text_content)
     sys.exit(0)
 except Exception as e:
@@ -182,13 +209,35 @@ except Exception as e:
     sys.exit(1)
 `;
 
-			// Execute Python script
-			const command = `${this.settings.pythonPath} -c "${pythonScript.replace(/"/g, '\\"')}"`;
-			
-			exec(command, (error: any, stdout: any, stderr: any) => {
+			// Write the script to a temporary file
+			try {
+				fs.writeFileSync(tempScriptPath, pythonScript, 'utf-8');
+			} catch (error: any) {
+				reject(new Error(`Failed to create temporary Python script: ${error.message}`));
+				return;
+			}
+
+			// Execute Python script with environment variables
+			const env = {
+				...process.env,
+				MARKITDOWN_INPUT_FILE: filePath,
+				MARKITDOWN_OUTPUT_FILE: outputPath,
+				MARKITDOWN_ENABLE_PLUGINS: this.settings.enablePlugins ? 'True' : 'False'
+			};
+
+			exec(`"${this.settings.pythonPath}" "${tempScriptPath}"`, { env }, (error: any, stdout: any, stderr: any) => {
+				// Clean up temporary script file
+				try {
+					if (fs.existsSync(tempScriptPath)) {
+						fs.unlinkSync(tempScriptPath);
+					}
+				} catch (cleanupError) {
+					console.error('Failed to clean up temporary script:', cleanupError);
+				}
+
 				if (error) {
 					// Fallback to basic CLI if Python script fails
-					const fallbackCommand = `${this.settings.pythonPath} -m markitdown "${filePath}" > "${outputPath}"`;
+					const fallbackCommand = `"${this.settings.pythonPath}" -m markitdown "${filePath}" > "${outputPath}"`;
 					
 					exec(fallbackCommand, (fallbackError: any, fallbackStdout: any, fallbackStderr: any) => {
 						if (fallbackError) {
