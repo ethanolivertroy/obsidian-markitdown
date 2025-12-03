@@ -18,6 +18,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { exec } from 'child_process';
 
 // Add type for the app with setting property
@@ -151,56 +152,31 @@ export default class MarkitdownPlugin extends Plugin {
 				return;
 			}
 
-			// Helper function to escape strings for Python
-			const escapePythonString = (str: string): string => {
-				return str
-					.replace(/\\/g, '\\\\')
-					.replace(/'/g, "\\'")
-					.replace(/\n/g, '\\n')
-					.replace(/\r/g, '\\r')
-					.replace(/\t/g, '\\t');
-			};
-
-			// Convert JavaScript value to Python literal
-			const toPythonValue = (value: any): string => {
-				if (value === null || value === undefined) {
-					return 'None';
-				} else if (typeof value === 'boolean') {
-					return value ? 'True' : 'False';
-				} else if (typeof value === 'number') {
-					return String(value);
-				} else if (typeof value === 'string') {
-					return `'${escapePythonString(value)}'`;
-				} else if (Array.isArray(value)) {
-					return `[${value.map(toPythonValue).join(', ')}]`;
-				} else if (typeof value === 'object') {
-					const pairs = Object.keys(value).map(k => `'${escapePythonString(k)}': ${toPythonValue(value[k])}`);
-					return `{${pairs.join(', ')}}`;
-				}
-				return 'None';
-			};
-
-			// Build argument string for Python
-			const argsString = Object.keys(pluginArgsObj)
-				.map(key => `${key}=${toPythonValue(pluginArgsObj[key])}`)
-				.join(', ');
-
-			// Create a temporary Python script file
-			const tempScriptPath = path.join(os.tmpdir(), `markitdown_convert_${Date.now()}.py`);
+			// Create a temporary Python script file with secure random name
+			const randomName = crypto.randomBytes(16).toString('hex');
+			const tempScriptPath = path.join(os.tmpdir(), `markitdown_${randomName}.py`);
 			
-			// Create Python script content with properly escaped paths
+			// Create Python script content that reads all parameters from environment
 			const pythonScript = `import sys
 import os
+import json
 from markitdown import MarkItDown
 
-# Read arguments from environment variables for security
+# Read all parameters from environment variables for security
 input_file = os.environ.get('MARKITDOWN_INPUT_FILE', '')
 output_file = os.environ.get('MARKITDOWN_OUTPUT_FILE', '')
 enable_plugins = os.environ.get('MARKITDOWN_ENABLE_PLUGINS', 'False') == 'True'
+plugin_args_json = os.environ.get('MARKITDOWN_PLUGIN_ARGS', '{}')
 
 try:
+    # Parse plugin arguments from JSON
+    plugin_args = json.loads(plugin_args_json)
+    
+    # Create MarkItDown instance and convert
     md = MarkItDown(enable_plugins=enable_plugins)
-    result = md.convert(input_file${argsString ? ', ' + argsString : ''})
+    result = md.convert(input_file, **plugin_args)
+    
+    # Write output
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(result.text_content)
     sys.exit(0)
@@ -209,20 +185,21 @@ except Exception as e:
     sys.exit(1)
 `;
 
-			// Write the script to a temporary file
+			// Write the script to a temporary file with restrictive permissions
 			try {
-				fs.writeFileSync(tempScriptPath, pythonScript, 'utf-8');
+				fs.writeFileSync(tempScriptPath, pythonScript, { mode: 0o600, encoding: 'utf-8' });
 			} catch (error: any) {
 				reject(new Error(`Failed to create temporary Python script: ${error.message}`));
 				return;
 			}
 
-			// Execute Python script with environment variables
+			// Execute Python script with all parameters in environment variables
 			const env = {
 				...process.env,
 				MARKITDOWN_INPUT_FILE: filePath,
 				MARKITDOWN_OUTPUT_FILE: outputPath,
-				MARKITDOWN_ENABLE_PLUGINS: this.settings.enablePlugins ? 'True' : 'False'
+				MARKITDOWN_ENABLE_PLUGINS: this.settings.enablePlugins ? 'True' : 'False',
+				MARKITDOWN_PLUGIN_ARGS: JSON.stringify(pluginArgsObj)
 			};
 
 			exec(`"${this.settings.pythonPath}" "${tempScriptPath}"`, { env }, (error: any, stdout: any, stderr: any) => {
