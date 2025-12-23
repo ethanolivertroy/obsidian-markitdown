@@ -17,6 +17,8 @@ import {
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import * as crypto from 'crypto';
 import { exec } from 'child_process';
 
 // Add type for the app with setting property
@@ -30,6 +32,7 @@ interface AppWithSetting extends App {
 interface MarkitdownSettings {
 	pythonPath: string;
 	enablePlugins: boolean;
+	pluginArgs: string;
 	docintelEndpoint: string;
 	outputPath: string;
 }
@@ -37,6 +40,7 @@ interface MarkitdownSettings {
 const DEFAULT_SETTINGS: MarkitdownSettings = {
 	pythonPath: 'python',
 	enablePlugins: false,
+	pluginArgs: '{}',
 	docintelEndpoint: '',
 	outputPath: ''
 }
@@ -136,31 +140,88 @@ export default class MarkitdownPlugin extends Plugin {
 
 	async convertFile(filePath: string, outputPath: string): Promise<string> {
 		return new Promise((resolve, reject) => {
-			// Build a command that uses the markitdown CLI syntax
-			// According to the error message, markitdown just takes a filename as argument
-			let command = `markitdown "${filePath}" > "${outputPath}"`;
+			// Parse plugin arguments
+			let pluginArgsObj: Record<string, any> = {};
+			try {
+				if (this.settings.pluginArgs && this.settings.pluginArgs.trim() !== '') {
+					pluginArgsObj = JSON.parse(this.settings.pluginArgs);
+				}
+			} catch (error) {
+				console.error('Failed to parse plugin arguments:', error);
+				reject(new Error('Invalid JSON in plugin arguments setting'));
+				return;
+			}
+
+			// Create a temporary Python script file with secure random name
+			const randomName = crypto.randomBytes(16).toString('hex');
+			const tempScriptPath = path.join(os.tmpdir(), `markitdown_${randomName}.py`);
 			
-			// Execute as a shell command
-			exec(command, (error, stdout, stderr) => {
+			// Create Python script content that reads all parameters from environment
+			const pythonScript = `import sys
+import os
+import json
+from markitdown import MarkItDown
+
+# Read all parameters from environment variables for security
+input_file = os.environ.get('MARKITDOWN_INPUT_FILE', '')
+output_file = os.environ.get('MARKITDOWN_OUTPUT_FILE', '')
+enable_plugins = os.environ.get('MARKITDOWN_ENABLE_PLUGINS', 'False') == 'True'
+plugin_args_json = os.environ.get('MARKITDOWN_PLUGIN_ARGS', '{}')
+
+try:
+    # Parse plugin arguments from JSON
+    plugin_args = json.loads(plugin_args_json)
+    
+    # Create MarkItDown instance and convert
+    md = MarkItDown(enable_plugins=enable_plugins)
+    result = md.convert(input_file, **plugin_args)
+    
+    # Write output
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(result.text_content)
+    sys.exit(0)
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+`;
+
+			// Write the script to a temporary file with restrictive permissions
+			try {
+				fs.writeFileSync(tempScriptPath, pythonScript, { mode: 0o600, encoding: 'utf-8' });
+			} catch (error: any) {
+				reject(new Error(`Failed to create temporary Python script: ${error.message}`));
+				return;
+			}
+
+			// Execute Python script with all parameters in environment variables
+			const env = {
+				...process.env,
+				MARKITDOWN_INPUT_FILE: filePath,
+				MARKITDOWN_OUTPUT_FILE: outputPath,
+				MARKITDOWN_ENABLE_PLUGINS: this.settings.enablePlugins ? 'True' : 'False',
+				MARKITDOWN_PLUGIN_ARGS: JSON.stringify(pluginArgsObj)
+			};
+
+			exec(`"${this.settings.pythonPath}" "${tempScriptPath}"`, { env }, (error: any, stdout: any, stderr: any) => {
+				// Clean up temporary script file
+				try {
+					if (fs.existsSync(tempScriptPath)) {
+						fs.unlinkSync(tempScriptPath);
+					}
+				} catch (cleanupError) {
+					console.error('Failed to clean up temporary script:', cleanupError);
+				}
+
 				if (error) {
-					// Try alternative approach with Python module if the first method fails
-					const moduleCommand = `${this.settings.pythonPath} -c "from markitdown import convert; convert('${filePath}', output_file='${outputPath}')"`;
+					// Fallback to basic CLI if Python script fails
+					const fallbackCommand = `"${this.settings.pythonPath}" -m markitdown "${filePath}" > "${outputPath}"`;
 					
-					exec(moduleCommand, (moduleError, moduleStdout, moduleStderr) => {
-						if (moduleError) {
-							// One last attempt with just a basic command
-							const basicCommand = `${this.settings.pythonPath} -m markitdown "${filePath}" > "${outputPath}"`;
-							
-							exec(basicCommand, (basicError, basicStdout, basicStderr) => {
-								if (basicError) {
-									reject(new Error(`Markitdown failed to convert the file: ${basicError.message}\n${basicStderr}`));
-									return;
-								}
-								resolve(basicStdout);
-							});
+					exec(fallbackCommand, (fallbackError: any, fallbackStdout: any, fallbackStderr: any) => {
+						if (fallbackError) {
+							reject(new Error(`Markitdown failed to convert the file: ${fallbackError.message}\n${stderr || fallbackStderr}`));
 							return;
 						}
-						resolve(moduleStdout);
+						resolve(fallbackStdout);
 					});
 					return;
 				}
@@ -646,6 +707,17 @@ class MarkitdownSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.enablePlugins)
 				.onChange(async (value) => {
 					this.plugin.settings.enablePlugins = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Plugin arguments')
+			.setDesc('JSON object with arguments to pass to plugin converters (e.g., {"add_page_separators": true, "remove_headers_footers": true})')
+			.addTextArea(text => text
+				.setPlaceholder('{}')
+				.setValue(this.plugin.settings.pluginArgs)
+				.onChange(async (value: any) => {
+					this.plugin.settings.pluginArgs = value;
 					await this.plugin.saveSettings();
 				}));
 
