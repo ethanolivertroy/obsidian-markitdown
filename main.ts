@@ -113,7 +113,7 @@ export default class MarkitdownPlugin extends Plugin {
 
 	async execCommand(command: string): Promise<string> {
 		return new Promise((resolve, reject) => {
-			exec(command, (error, stdout, stderr) => {
+			exec(command, { env: { ...process.env, PYTHONUTF8: '1' } }, (error, stdout, stderr) => {
 				if (error) {
 					reject(error);
 					return;
@@ -140,18 +140,21 @@ export default class MarkitdownPlugin extends Plugin {
 			// According to the error message, markitdown just takes a filename as argument
 			let command = `markitdown "${filePath}" > "${outputPath}"`;
 			
+			// Set environment to ensure UTF-8 encoding for Unicode support (including diacritics)
+			const env = { ...process.env, PYTHONUTF8: '1' };
+			
 			// Execute as a shell command
-			exec(command, (error, stdout, stderr) => {
+			exec(command, { env }, (error, stdout, stderr) => {
 				if (error) {
 					// Try alternative approach with Python module if the first method fails
 					const moduleCommand = `${this.settings.pythonPath} -c "from markitdown import convert; convert('${filePath}', output_file='${outputPath}')"`;
 					
-					exec(moduleCommand, (moduleError, moduleStdout, moduleStderr) => {
+					exec(moduleCommand, { env }, (moduleError, moduleStdout, moduleStderr) => {
 						if (moduleError) {
 							// One last attempt with just a basic command
 							const basicCommand = `${this.settings.pythonPath} -m markitdown "${filePath}" > "${outputPath}"`;
 							
-							exec(basicCommand, (basicError, basicStdout, basicStderr) => {
+							exec(basicCommand, { env }, (basicError, basicStdout, basicStderr) => {
 								if (basicError) {
 									reject(new Error(`Markitdown failed to convert the file: ${basicError.message}\n${basicStderr}`));
 									return;
