@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-markitdown",
-	"version": "1.0.1",
+	"version": "2.0.0",
 	"description": "Convert various file formats to Markdown using Microsoft's Markitdown library",
 	"main": "main.js",
 	"scripts": {
@@ -12,13 +12,11 @@
 	"author": "Ethan Troy",
 	"license": "MIT",
 	"devDependencies": {
-		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
+		"@types/node": "^20.11.0",
 		"builtin-modules": "3.3.0",
 		"esbuild": "0.25.0",
 		"obsidian": "latest",
-		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"tslib": "^2.6.0",
+		"typescript": "^5.4.0"
 	}
 }

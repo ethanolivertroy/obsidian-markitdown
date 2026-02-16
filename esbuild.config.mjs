@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { cpSync } from "fs";
 
 const banner =
 `/*
@@ -10,6 +11,16 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+// Copy Python wrapper scripts alongside main.js
+// These are shipped with the plugin and called via spawn()
+function copyPythonScripts() {
+	try {
+		cpSync("python", "python", { recursive: true });
+	} catch {
+		// python/ already in place (dev mode)
+	}
+}
 
 const context = await esbuild.context({
 	banner: {
@@ -33,7 +44,7 @@ const context = await esbuild.context({
 		"@lezer/lr",
 		...builtins],
 	format: "cjs",
-	target: "es2018",
+	target: "es2020",
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
@@ -43,6 +54,7 @@ const context = await esbuild.context({
 
 if (prod) {
 	await context.rebuild();
+	copyPythonScripts();
 	process.exit(0);
 } else {
 	await context.watch();
