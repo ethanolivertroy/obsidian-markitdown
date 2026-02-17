@@ -121,7 +121,8 @@ export class FolderConvertModal extends Modal {
 
 			const baseName = path.basename(file.name, path.extname(file.name));
 			const outputPath = path.join(outputFolder, `${baseName}.md`);
-			const tempFilePath = path.join(outputFolder, `${Date.now()}_${file.name}`);
+			const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+			const tempFilePath = path.join(outputFolder, `tmp_${Date.now()}_${i}_${safeName}`);
 
 			try {
 				const buffer = await file.arrayBuffer();
@@ -144,6 +145,9 @@ export class FolderConvertModal extends Modal {
 					fs.unlinkSync(tempFilePath);
 				}
 			}
+
+			// Update progress after conversion completes so counts are accurate
+			progressModal?.updateProgress(i + 1, file.name, success, failed);
 		}
 
 		// Refresh vault

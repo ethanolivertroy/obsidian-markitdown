@@ -53,7 +53,8 @@ export class FileConvertModal extends Modal {
 				const outputPath = path.join(outputFolder, `${baseName}.md`);
 
 				// Write the DOM File to a temp file on disk
-				const tempFilePath = path.join(outputFolder, `${Date.now()}_${file.name}`);
+				const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+				const tempFilePath = path.join(outputFolder, `tmp_${Date.now()}_${safeName}`);
 				const buffer = await file.arrayBuffer();
 				fs.writeFileSync(tempFilePath, Buffer.from(buffer));
 

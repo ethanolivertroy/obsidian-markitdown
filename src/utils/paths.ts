@@ -38,7 +38,9 @@ export function resolveOutputFolder(vaultPath: string, outputSetting: string): s
 export function resolveImageDir(outputMdPath: string, template: string): string {
 	const dir = path.dirname(outputMdPath);
 	const baseName = path.basename(outputMdPath, '.md');
-	const folderName = template.replace('{filename}', baseName);
+	// Strip path separators from template to prevent path traversal
+	const sanitizedTemplate = template.replace(/[/\\]/g, '-');
+	const folderName = sanitizedTemplate.replace('{filename}', baseName);
 	return path.join(dir, folderName);
 }
 
