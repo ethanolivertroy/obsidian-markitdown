@@ -19,8 +19,14 @@ export function resolveOutputFolder(vaultPath: string, outputSetting: string): s
 	let outputFolder: string;
 
 	if (outputSetting) {
-		outputFolder = path.join(vaultPath, outputSetting);
+		outputFolder = path.resolve(vaultPath, outputSetting);
 	} else {
+		outputFolder = path.join(vaultPath, 'markitdown-output');
+	}
+
+	// Prevent path traversal outside the vault
+	const resolvedVault = path.resolve(vaultPath);
+	if (!outputFolder.startsWith(resolvedVault + path.sep) && outputFolder !== resolvedVault) {
 		outputFolder = path.join(vaultPath, 'markitdown-output');
 	}
 

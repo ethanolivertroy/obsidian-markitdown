@@ -31,8 +31,11 @@ export default class MarkitdownPlugin extends Plugin {
 		await this.loadSettings();
 
 		const pluginDir = this.getPluginDir();
-		this.converter = new MarkitdownConverter(this.settings.pythonPath, pluginDir);
-		this.dependencyStatus = await checkDependencies(this.settings.pythonPath, pluginDir);
+		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
+		this.dependencyStatus = depCheck.status;
+		// Use the resolved python path (handles python→python3 fallback)
+		const resolvedPython = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(resolvedPython, pluginDir);
 
 		// Ribbon icon
 		this.addRibbonIcon('file-text', 'Convert to Markdown', () => {
@@ -196,7 +199,8 @@ export default class MarkitdownPlugin extends Plugin {
 		if (vaultPath && this.manifest.dir) {
 			return path.join(vaultPath, this.manifest.dir);
 		}
-		// Fallback: resolve relative to the working directory
+		// Non-local vaults (e.g., Obsidian Sync without local adapter) cannot resolve plugin dir
+		console.warn('markitdown: Could not resolve vault base path. Plugin features may not work correctly.');
 		return path.resolve(this.manifest.dir ?? '.');
 	}
 
@@ -218,8 +222,9 @@ export default class MarkitdownPlugin extends Plugin {
 	/** Refresh dependency status. */
 	async refreshDependencies(): Promise<void> {
 		const pluginDir = this.getPluginDir();
-		this.dependencyStatus = await checkDependencies(this.settings.pythonPath, pluginDir);
-		this.converter = new MarkitdownConverter(this.settings.pythonPath, pluginDir);
+		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
+		this.dependencyStatus = depCheck.status;
+		this.converter = new MarkitdownConverter(depCheck.resolvedPythonPath, pluginDir);
 	}
 
 	async loadSettings() {

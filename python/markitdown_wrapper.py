@@ -48,12 +48,17 @@ def extract_images_from_markdown(markdown_text: str, image_dir: str) -> tuple[st
         img_format = match.group(2)
         b64_data = match.group(3).replace("\n", "").replace("\r", "").replace(" ", "")
 
-        # Normalize format
+        # Normalize and sanitize format — only allow known image extensions
+        ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp", "svg", "ico"}
         ext = img_format.lower()
         if ext == "jpeg":
             ext = "jpg"
         elif ext == "svg+xml":
             ext = "svg"
+        # Strip anything that isn't alphanumeric to prevent path traversal
+        ext = re.sub(r'[^a-z0-9]', '', ext)
+        if ext not in ALLOWED_EXTENSIONS:
+            ext = "png"  # safe fallback
 
         filename = f"image_{count:03d}.{ext}"
         filepath = os.path.join(image_dir, filename)

@@ -45,6 +45,8 @@ export class FileConvertModal extends Modal {
 				const vaultPath = getVaultBasePath(this.app);
 				if (!vaultPath) {
 					new Notice('Could not determine vault path. This plugin requires a local vault.');
+					convertButton.disabled = false;
+					convertButton.setText('Convert');
 					return;
 				}
 

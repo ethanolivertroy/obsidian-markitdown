@@ -31,5 +31,6 @@ export const EXTENSION_GROUPS: ExtensionGroup[] = [
 ];
 
 export function isConvertible(extension: string): boolean {
-	return SUPPORTED_EXTENSIONS.includes(extension.toLowerCase());
+	const ext = extension.toLowerCase().replace(/^\./, '');
+	return SUPPORTED_EXTENSIONS.includes(ext);
 }

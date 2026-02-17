@@ -65,10 +65,15 @@ export function getPythonScriptPath(scriptName: string, pluginDir: string): stri
 /**
  * Check Python installation and package versions using check_install.py.
  */
+/**
+ * Check Python installation and package versions using check_install.py.
+ * Returns the status and the resolved python path (which may differ from
+ * the configured path if the python3 fallback was used).
+ */
 export async function checkDependencies(
 	pythonPath: string,
 	pluginDir: string
-): Promise<DependencyStatus> {
+): Promise<{ status: DependencyStatus; resolvedPythonPath: string }> {
 	const status: DependencyStatus = {
 		pythonInstalled: false,
 		pythonVersion: null,
@@ -76,44 +81,37 @@ export async function checkDependencies(
 		markitdownVersion: null,
 	};
 
-	try {
-		const scriptPath = getPythonScriptPath('check_install.py', pluginDir);
-		const result = await runPythonScript(pythonPath, scriptPath, ['--check', 'all']);
+	const scriptPath = getPythonScriptPath('check_install.py', pluginDir);
 
-		if (result.exitCode === 0 && result.stdout) {
-			const data = JSON.parse(result.stdout);
-			status.pythonInstalled = true;
-			status.pythonVersion = data.python_version ?? null;
+	// Try configured path first, then python3 fallback
+	const pathsToTry = [pythonPath];
+	if (pythonPath === 'python') {
+		pathsToTry.push('python3');
+	}
 
-			if (data.packages?.markitdown) {
-				status.markitdownInstalled = data.packages.markitdown.installed;
-				status.markitdownVersion = data.packages.markitdown.version ?? null;
-			}
-		}
-	} catch {
-		// Python not found or script failed — try python3 as fallback
-		if (pythonPath === 'python') {
-			try {
-				const scriptPath = getPythonScriptPath('check_install.py', pluginDir);
-				const result = await runPythonScript('python3', scriptPath, ['--check', 'all']);
+	for (const tryPath of pathsToTry) {
+		try {
+			const result = await runPythonScript(tryPath, scriptPath, ['--check', 'all']);
 
-				if (result.exitCode === 0 && result.stdout) {
-					const data = JSON.parse(result.stdout);
-					status.pythonInstalled = true;
-					status.pythonVersion = data.python_version ?? null;
+			if (result.exitCode === 0 && result.stdout) {
+				const data = JSON.parse(result.stdout);
+				status.pythonInstalled = true;
+				status.pythonVersion = data.python_version ?? null;
 
-					if (data.packages?.markitdown) {
-						status.markitdownInstalled = data.packages.markitdown.installed;
-						status.markitdownVersion = data.packages.markitdown.version ?? null;
-					}
+				if (data.packages?.markitdown) {
+					status.markitdownInstalled = data.packages.markitdown.installed;
+					status.markitdownVersion = data.packages.markitdown.version ?? null;
 				}
-			} catch {
-				// Neither python nor python3 available
+
+				return { status, resolvedPythonPath: tryPath };
 			}
+		} catch {
+			// This path didn't work, try next
+			continue;
 		}
 	}
 
-	return status;
+	return { status, resolvedPythonPath: pythonPath };
 }
 
 /**

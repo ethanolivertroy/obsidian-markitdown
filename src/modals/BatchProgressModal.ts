@@ -31,7 +31,7 @@ export class BatchProgressModal extends Modal {
 	}
 
 	updateProgress(current: number, currentFile: string, success: number, failed: number) {
-		const pct = Math.round((current / this.totalFiles) * 100);
+		const pct = this.totalFiles > 0 ? Math.round((current / this.totalFiles) * 100) : 0;
 		this.progressFill.style.width = `${pct}%`;
 		this.statusEl.setText(
 			`${current} / ${this.totalFiles} files converted (${success} successful, ${failed} failed)`
