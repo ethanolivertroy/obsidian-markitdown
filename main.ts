@@ -1,179 +1,239 @@
-import { 
-	App, 
-	Editor, 
-	MarkdownView, 
-	Modal, 
-	Notice, 
-	Plugin, 
-	PluginSettingTab, 
-	Setting, 
-	TFile, 
-	TFolder, 
-	normalizePath,
-	FileSystemAdapter,
-	requestUrl,
-	WorkspaceLeaf
-} from 'obsidian';
-import { spawn } from 'child_process';
-import * as fs from 'fs';
+import { Notice, Plugin, TFile } from 'obsidian';
 import * as path from 'path';
-import { exec } from 'child_process';
-
-// Add type for the app with setting property
-interface AppWithSetting extends App {
-	setting: {
-		open: () => void;
-		openTabById: (id: string) => void;
-	}
-}
-
-interface MarkitdownSettings {
-	pythonPath: string;
-	enablePlugins: boolean;
-	docintelEndpoint: string;
-	outputPath: string;
-}
-
-const DEFAULT_SETTINGS: MarkitdownSettings = {
-	pythonPath: 'python',
-	enablePlugins: false,
-	docintelEndpoint: '',
-	outputPath: ''
-}
+import {
+	MarkitdownSettings,
+	DEFAULT_SETTINGS,
+	ConversionOptions,
+	ConversionResult,
+	DependencyStatus,
+	PluginArgEntry,
+} from './src/types/settings';
+import { MarkitdownConverter } from './src/converter/MarkitdownConverter';
+import { checkDependencies, installPackage } from './src/utils/python';
+import {
+	getVaultBasePath,
+	resolveOutputFolder,
+	resolveImageDir,
+	toVaultRelative,
+} from './src/utils/paths';
+import { isConvertible } from './src/utils/fileTypes';
+import { SettingsTab } from './src/settings/SettingsTab';
+import { FileConvertModal } from './src/modals/FileConvertModal';
+import { FolderConvertModal } from './src/modals/FolderConvertModal';
+import { SetupModal } from './src/modals/SetupModal';
 
 export default class MarkitdownPlugin extends Plugin {
-	settings: MarkitdownSettings;
-	pythonInstalled: boolean = false;
-	markitdownInstalled: boolean = false;
+	settings: MarkitdownSettings = DEFAULT_SETTINGS;
+	dependencyStatus: DependencyStatus = {
+		pythonInstalled: false,
+		pythonVersion: null,
+		markitdownInstalled: false,
+		markitdownVersion: null,
+	};
+	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
+	private resolvedPythonPath = 'python';
 
 	async onload() {
 		await this.loadSettings();
 
-		// Check for Python and Markitdown installation
-		await this.checkDependencies();
+		const pluginDir = this.getPluginDir();
+		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
+		this.dependencyStatus = depCheck.status;
+		// Use the resolved python path (handles python→python3 fallback)
+		this.resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 
-		// Add ribbon icon
-		const ribbonIconEl = this.addRibbonIcon(
-			'file-text', 
-			'Convert to Markdown with Markitdown', 
-			() => {
-				new MarkitdownFileModal(this.app, this).open();
-			}
-		);
-		
-		// Add command to convert selected file
+		// Ribbon icon
+		this.addRibbonIcon('file-text', 'Convert to Markdown', () => {
+			this.openConvertModal();
+		});
+
+		// Commands
 		this.addCommand({
-			id: 'convert-file-markitdown',
-			name: 'Convert file to Markdown with Markitdown',
-			callback: () => {
-				if (!this.markitdownInstalled) {
-					new MarkitdownSetupModal(this.app, this).open();
-					return;
-				}
-				new MarkitdownFileModal(this.app, this).open();
-			}
+			id: 'convert-file',
+			name: 'Convert file to Markdown',
+			callback: () => this.openConvertModal(),
 		});
 
-		// Add command to convert folder
 		this.addCommand({
-			id: 'convert-folder-markitdown',
-			name: 'Convert folder contents to Markdown with Markitdown',
-			callback: () => {
-				if (!this.markitdownInstalled) {
-					new MarkitdownSetupModal(this.app, this).open();
-					return;
-				}
-				new MarkitdownFolderModal(this.app, this).open();
-			}
+			id: 'convert-folder',
+			name: 'Convert folder to Markdown',
+			callback: () => this.openFolderModal(),
 		});
 
-		// Add settings tab
-		this.addSettingTab(new MarkitdownSettingTab(this.app, this));
-	}
-
-	async checkDependencies() {
-		try {
-			// Check for Python
-			await this.execCommand(`${this.settings.pythonPath} --version`);
-			this.pythonInstalled = true;
-
-			// Check for Markitdown
-			try {
-				await this.execCommand(`${this.settings.pythonPath} -m pip show markitdown`);
-				this.markitdownInstalled = true;
-			} catch (error) {
-				this.markitdownInstalled = false;
-			}
-		} catch (error) {
-			this.pythonInstalled = false;
-			this.markitdownInstalled = false;
-			console.error("Failed to check Python installation", error);
+		// Context menu
+		if (this.settings.enableContextMenu) {
+			this.registerFileMenu();
 		}
-	}
 
-	async execCommand(command: string): Promise<string> {
-		return new Promise((resolve, reject) => {
-			exec(command, { env: { ...process.env, PYTHONUTF8: '1' } }, (error, stdout, stderr) => {
-				if (error) {
-					reject(error);
-					return;
-				}
-				resolve(stdout);
-			});
-		});
-	}
-
-	async installMarkitdown(): Promise<boolean> {
-		try {
-			await this.execCommand(`${this.settings.pythonPath} -m pip install 'markitdown[all]'`);
-			this.markitdownInstalled = true;
-			return true;
-		} catch (error) {
-			console.error("Failed to install Markitdown", error);
-			return false;
-		}
-	}
-
-	async convertFile(filePath: string, outputPath: string): Promise<string> {
-		return new Promise((resolve, reject) => {
-			// Build a command that uses the markitdown CLI syntax
-			// According to the error message, markitdown just takes a filename as argument
-			let command = `markitdown "${filePath}" > "${outputPath}"`;
-			
-			// Set environment to ensure UTF-8 encoding for Unicode support (including diacritics)
-			const env = { ...process.env, PYTHONUTF8: '1' };
-			
-			// Execute as a shell command
-			exec(command, { env }, (error, stdout, stderr) => {
-				if (error) {
-					// Try alternative approach with Python module if the first method fails
-					const moduleCommand = `${this.settings.pythonPath} -c "from markitdown import convert; convert('${filePath}', output_file='${outputPath}')"`;
-					
-					exec(moduleCommand, { env }, (moduleError, moduleStdout, moduleStderr) => {
-						if (moduleError) {
-							// One last attempt with just a basic command
-							const basicCommand = `${this.settings.pythonPath} -m markitdown "${filePath}" > "${outputPath}"`;
-							
-							exec(basicCommand, { env }, (basicError, basicStdout, basicStderr) => {
-								if (basicError) {
-									reject(new Error(`Markitdown failed to convert the file: ${basicError.message}\n${basicStderr}`));
-									return;
-								}
-								resolve(basicStdout);
-							});
-							return;
-						}
-						resolve(moduleStdout);
-					});
-					return;
-				}
-				resolve(stdout);
-			});
-		});
+		// Settings tab
+		this.addSettingTab(new SettingsTab(this.app, this));
 	}
 
 	onunload() {
-		// Nothing special to clean up
+		// registerEvent handles cleanup automatically
+	}
+
+	/** Open file conversion modal, or setup modal if not installed. */
+	private openConvertModal() {
+		if (!this.dependencyStatus.markitdownInstalled) {
+			new SetupModal(this.app, this).open();
+			return;
+		}
+		new FileConvertModal(this.app, this).open();
+	}
+
+	/** Open folder conversion modal, or setup modal if not installed. */
+	private openFolderModal() {
+		if (!this.dependencyStatus.markitdownInstalled) {
+			new SetupModal(this.app, this).open();
+			return;
+		}
+		new FolderConvertModal(this.app, this).open();
+	}
+
+	/** Register right-click context menu on supported file types. */
+	private registerFileMenu() {
+		this.registerEvent(
+			this.app.workspace.on('file-menu', (menu, file) => {
+				if (!(file instanceof TFile)) return;
+				if (!isConvertible(file.extension)) return;
+
+				menu.addItem((item) => {
+					item.setTitle('Convert to Markdown')
+						.setIcon('file-text')
+						.onClick(() => this.convertVaultFile(file));
+				});
+			})
+		);
+	}
+
+	/** Convert a file that already exists in the vault (from context menu). */
+	async convertVaultFile(file: TFile): Promise<void> {
+		const vaultPath = getVaultBasePath(this.app);
+		if (!vaultPath) {
+			new Notice('Could not determine vault path. This plugin requires a local vault.');
+			return;
+		}
+
+		if (!this.dependencyStatus.markitdownInstalled) {
+			new SetupModal(this.app, this).open();
+			return;
+		}
+
+		const inputPath = path.join(vaultPath, file.path);
+		const outputFolder = resolveOutputFolder(vaultPath, this.settings.outputPath);
+		const baseName = file.basename;
+		const outputPath = path.join(outputFolder, `${baseName}.md`);
+		const options = this.buildConversionOptions(outputPath);
+
+		new Notice('Converting file...');
+		const result = await this.converter.convert(inputPath, outputPath, options);
+
+		if (result.success) {
+			const msg = result.imagesExtracted
+				? `Converted successfully (${result.imagesExtracted} images extracted)`
+				: 'Converted successfully';
+			new Notice(msg);
+			await this.openConvertedFile(outputPath, vaultPath);
+		} else {
+			new Notice(`Conversion failed: ${result.error}`);
+		}
+	}
+
+	/**
+	 * Convert an external file (from file input dialog, not in vault).
+	 * Used by FileConvertModal and FolderConvertModal.
+	 */
+	async convertExternalFile(
+		inputPath: string,
+		outputPath: string
+	): Promise<ConversionResult> {
+		const options = this.buildConversionOptions(outputPath);
+		return this.converter.convert(inputPath, outputPath, options);
+	}
+
+	/** Build ConversionOptions from current settings. */
+	buildConversionOptions(outputPath: string): ConversionOptions {
+		const options: ConversionOptions = {
+			enablePlugins: this.settings.enablePlugins,
+			docintelEndpoint: this.settings.docintelEndpoint || undefined,
+		};
+
+		if (this.settings.pluginArgs.length > 0) {
+			options.pluginArgs = this.pluginArgsToRecord(this.settings.pluginArgs);
+		}
+
+		if (this.settings.imageExtractionEnabled) {
+			options.extractImages = true;
+			options.imageDir = resolveImageDir(
+				outputPath,
+				this.settings.imageSubfolderTemplate
+			);
+		}
+
+		return options;
+	}
+
+	/** Convert PluginArgEntry[] to Record for Python. */
+	private pluginArgsToRecord(entries: PluginArgEntry[]): Record<string, unknown> {
+		const record: Record<string, unknown> = Object.create(null);
+		for (const entry of entries) {
+			if (!entry.key.trim()) continue;
+			// Reject prototype pollution keys
+			if (entry.key === '__proto__' || entry.key === 'constructor' || entry.key === 'prototype') continue;
+			// Try to parse as JSON value, fall back to string
+			try {
+				record[entry.key] = JSON.parse(entry.value);
+			} catch {
+				record[entry.key] = entry.value;
+			}
+		}
+		return record;
+	}
+
+	/** Open a converted file in the workspace. */
+	async openConvertedFile(outputPath: string, vaultPath: string): Promise<void> {
+		const relativePath = toVaultRelative(outputPath, vaultPath);
+		const existingFile = this.app.vault.getAbstractFileByPath(relativePath);
+		if (existingFile instanceof TFile) {
+			await this.app.workspace.getLeaf().openFile(existingFile);
+		}
+	}
+
+	/** Get the absolute path to the plugin directory. */
+	getPluginDir(): string {
+		const vaultPath = getVaultBasePath(this.app);
+		if (vaultPath && this.manifest.dir) {
+			return path.join(vaultPath, this.manifest.dir);
+		}
+		// Non-local vaults (e.g., Obsidian Sync without local adapter) cannot resolve plugin dir
+		console.warn('markitdown: Could not resolve vault base path. Plugin features may not work correctly.');
+		return path.resolve(this.manifest.dir ?? '.');
+	}
+
+	/** Install markitdown package using the resolved Python path. */
+	async installMarkitdown(onProgress?: (line: string) => void): Promise<boolean> {
+		const pluginDir = this.getPluginDir();
+		const success = await installPackage(
+			this.resolvedPythonPath,
+			pluginDir,
+			'markitdown[all]',
+			onProgress
+		);
+		if (success) {
+			this.dependencyStatus.markitdownInstalled = true;
+		}
+		return success;
+	}
+
+	/** Refresh dependency status and resolved Python path. */
+	async refreshDependencies(): Promise<void> {
+		const pluginDir = this.getPluginDir();
+		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
+		this.dependencyStatus = depCheck.status;
+		this.resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 	}
 
 	async loadSettings() {
@@ -182,554 +242,5 @@ export default class MarkitdownPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class MarkitdownFileModal extends Modal {
-	plugin: MarkitdownPlugin;
-	
-	constructor(app: App, plugin: MarkitdownPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.addClass('markitdown-modal');
-		contentEl.createEl('h2', {text: 'Convert file to markdown'});
-		
-		if (!this.plugin.markitdownInstalled) {
-			contentEl.createEl('p', {
-				text: 'Markitdown is not installed. Please install it in the settings tab.'
-			});
-			
-			const buttonEl = contentEl.createEl('button', {
-				text: 'Go to settings'
-			});
-			
-			buttonEl.addEventListener('click', () => {
-				this.close();
-				// Open settings with proper typing
-				if ('setting' in this.app) {
-					const appWithSetting = this.app as AppWithSetting;
-					appWithSetting.setting.open();
-					appWithSetting.setting.openTabById('obsidian-markitdown');
-				}
-			});
-			
-			return;
-		}
-		
-		// Create file selector
-		contentEl.createEl('p', {text: 'Select a file to convert:'});
-		
-		const fileInputContainer = contentEl.createDiv('markitdown-file-input-container');
-		
-		const fileInput = fileInputContainer.createEl('input', {
-			attr: {
-				type: 'file',
-				accept: '.pdf,.docx,.pptx,.xlsx,.xls,.html,.htm,.txt,.csv,.json,.xml,.jpg,.jpeg,.png,.gif,.wav,.mp3,.zip'
-			}
-		});
-		
-		// Create convert button
-		const buttonContainer = contentEl.createDiv('markitdown-button-container');
-		
-		const convertButton = buttonContainer.createEl('button', {
-			text: 'Convert'
-		});
-		
-		convertButton.addEventListener('click', async () => {
-			if (fileInput.files && fileInput.files.length > 0) {
-				const file = fileInput.files[0];
-				
-				try {
-					// Get vault path if using FileSystemAdapter
-					let vaultPath = '';
-					if (this.app.vault.adapter instanceof FileSystemAdapter) {
-						vaultPath = this.app.vault.adapter.getBasePath();
-					}
-					
-					if (!vaultPath) {
-						new Notice('Could not determine vault path. This plugin requires a local vault.');
-						return;
-					}
-					
-					// Determine output path
-					let outputFolder = this.plugin.settings.outputPath || '';
-					if (!outputFolder) {
-						outputFolder = path.join(vaultPath, 'markitdown-output');
-						if (!fs.existsSync(outputFolder)) {
-							fs.mkdirSync(outputFolder, { recursive: true });
-						}
-					} else {
-						outputFolder = path.join(vaultPath, outputFolder);
-						if (!fs.existsSync(outputFolder)) {
-							fs.mkdirSync(outputFolder, { recursive: true });
-						}
-					}
-					
-					// Create output filename
-					const baseName = path.basename(file.name, path.extname(file.name));
-					const outputPath = path.join(outputFolder, `${baseName}.md`);
-					
-					new Notice('Converting file...');
-					
-					// Convert the file - file.path is not available in the DOM File interface
-					// Instead we need to create a temporary file
-					const tempFilePath = path.join(outputFolder, `${Date.now()}_${file.name}`);
-					
-					// Write the file to disk first
-					const buffer = await file.arrayBuffer();
-					fs.writeFileSync(tempFilePath, Buffer.from(buffer));
-
-					// Then convert it
-					await this.plugin.convertFile(tempFilePath, outputPath);
-					
-					// Clean up temp file
-					if (fs.existsSync(tempFilePath)) {
-						fs.unlinkSync(tempFilePath);
-					}
-					
-					// Refresh the vault to see the new file
-					await this.app.vault.adapter.exists(outputPath);
-					
-					new Notice(`File converted and saved to ${outputPath}`);
-					this.close();
-					
-					// Try to open the converted file
-					const relativePath = path.relative(vaultPath, outputPath).replace(/\\/g, '/');
-					const existingFile = this.app.vault.getAbstractFileByPath(relativePath);
-					if (existingFile instanceof TFile) {
-						this.app.workspace.getLeaf().openFile(existingFile);
-					}
-				} catch (error) {
-					console.error('Error during conversion:', error);
-					new Notice(`Error: ${error.message}`);
-				}
-			} else {
-				new Notice('Please select a file first');
-			}
-		});
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class MarkitdownFolderModal extends Modal {
-	plugin: MarkitdownPlugin;
-	
-	constructor(app: App, plugin: MarkitdownPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.addClass('markitdown-modal');
-		contentEl.createEl('h2', {text: 'Convert folder contents to markdown'});
-		
-		if (!this.plugin.markitdownInstalled) {
-			contentEl.createEl('p', {
-				text: 'Markitdown is not installed. Please install it in the settings tab.'
-			});
-			
-			const buttonEl = contentEl.createEl('button', {
-				text: 'Go to settings'
-			});
-			
-			buttonEl.addEventListener('click', () => {
-				this.close();
-				// Open settings with proper typing
-				if ('setting' in this.app) {
-					const appWithSetting = this.app as AppWithSetting;
-					appWithSetting.setting.open();
-					appWithSetting.setting.openTabById('obsidian-markitdown');
-				}
-			});
-			
-			return;
-		}
-		
-		// Create folder selector
-		contentEl.createEl('p', {text: 'Select a folder to process:'});
-		
-		const folderInputContainer = contentEl.createDiv('markitdown-file-input-container');
-		
-		const folderInput = folderInputContainer.createEl('input', {
-			attr: {
-				type: 'file',
-				webkitdirectory: '',
-				directory: ''
-			}
-		});
-		
-		// File extensions filter
-		contentEl.createEl('p', {text: 'Select file types to convert:'});
-		
-		const extensions = [
-			{name: 'PDF files', ext: '.pdf'},
-			{name: 'Word documents', ext: '.docx'},
-			{name: 'PowerPoint presentations', ext: '.pptx'},
-			{name: 'Excel spreadsheets', ext: '.xlsx,.xls'},
-			{name: 'Web pages', ext: '.html,.htm'},
-			{name: 'Text files', ext: '.txt'},
-			{name: 'Data files', ext: '.csv,.json,.xml'},
-			{name: 'Images', ext: '.jpg,.jpeg,.png,.gif'},
-			{name: 'Audio files', ext: '.wav,.mp3'},
-			{name: 'Archives', ext: '.zip'}
-		];
-		
-		const checkboxContainer = contentEl.createDiv('markitdown-checkbox-grid');
-		
-		const selectedExtensions: string[] = [];
-		
-		extensions.forEach(ext => {
-			const checkboxLabel = checkboxContainer.createEl('label', {cls: 'markitdown-checkbox-label'});
-			
-			const checkbox = checkboxLabel.createEl('input', {
-				attr: {
-					type: 'checkbox',
-					value: ext.ext
-				}
-			});
-			
-			checkbox.addEventListener('change', () => {
-				const exts = ext.ext.split(',');
-				if (checkbox.checked) {
-					exts.forEach(e => {
-						if (!selectedExtensions.includes(e)) {
-							selectedExtensions.push(e);
-						}
-					});
-				} else {
-					exts.forEach(e => {
-						const index = selectedExtensions.indexOf(e);
-						if (index > -1) {
-							selectedExtensions.splice(index, 1);
-						}
-					});
-				}
-			});
-			
-			checkboxLabel.appendText(ext.name);
-		});
-		
-		// Create convert button
-		const buttonContainer = contentEl.createDiv('markitdown-button-container');
-		
-		const convertButton = buttonContainer.createEl('button', {
-			text: 'Convert'
-		});
-		
-		convertButton.addEventListener('click', async () => {
-			if (folderInput.files && folderInput.files.length > 0) {
-				if (selectedExtensions.length === 0) {
-					new Notice('Please select at least one file type');
-					return;
-				}
-				
-				try {
-					// Get vault path if using FileSystemAdapter
-					let vaultPath = '';
-					if (this.app.vault.adapter instanceof FileSystemAdapter) {
-						vaultPath = this.app.vault.adapter.getBasePath();
-					}
-					
-					if (!vaultPath) {
-						new Notice('Could not determine vault path. This plugin requires a local vault.');
-						return;
-					}
-					
-					// Determine output path
-					let outputFolder = this.plugin.settings.outputPath || '';
-					if (!outputFolder) {
-						outputFolder = path.join(vaultPath, 'markitdown-output');
-						if (!fs.existsSync(outputFolder)) {
-							fs.mkdirSync(outputFolder, { recursive: true });
-						}
-					} else {
-						outputFolder = path.join(vaultPath, outputFolder);
-						if (!fs.existsSync(outputFolder)) {
-							fs.mkdirSync(outputFolder, { recursive: true });
-						}
-					}
-					
-					// Get files to convert
-					const filesToConvert: File[] = [];
-					for (let i = 0; i < folderInput.files.length; i++) {
-						const file = folderInput.files[i];
-						const ext = path.extname(file.name).toLowerCase();
-						if (selectedExtensions.includes(ext)) {
-							filesToConvert.push(file);
-						}
-					}
-					
-					if (filesToConvert.length === 0) {
-						new Notice('No matching files found in the selected folder');
-						return;
-					}
-					
-					new Notice(`Converting ${filesToConvert.length} files...`);
-					this.close();
-					
-					// Convert each file
-					let successCount = 0;
-					let failCount = 0;
-					
-					for (const file of filesToConvert) {
-						try {
-							// Create output filename
-							const baseName = path.basename(file.name, path.extname(file.name));
-							const outputPath = path.join(outputFolder, `${baseName}.md`);
-							
-							// Write the file to disk first since file.path is not available
-							const tempFilePath = path.join(outputFolder, `${Date.now()}_${file.name}`);
-							const buffer = await file.arrayBuffer();
-							fs.writeFileSync(tempFilePath, Buffer.from(buffer));
-							
-							// Convert the file
-							await this.plugin.convertFile(tempFilePath, outputPath);
-							
-							// Clean up temp file
-							if (fs.existsSync(tempFilePath)) {
-								fs.unlinkSync(tempFilePath);
-							}
-							
-							successCount++;
-						} catch (error) {
-							console.error(`Error converting ${file.name}:`, error);
-							failCount++;
-						}
-					}
-					
-					// Refresh the vault to see the new files
-					await this.app.vault.adapter.list(outputFolder);
-					
-					new Notice(`Conversion complete: ${successCount} successful, ${failCount} failed`);
-				} catch (error) {
-					console.error('Error during folder conversion:', error);
-					new Notice(`Error: ${error.message}`);
-				}
-			} else {
-				new Notice('Please select a folder first');
-			}
-		});
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class MarkitdownSetupModal extends Modal {
-	plugin: MarkitdownPlugin;
-	
-	constructor(app: App, plugin: MarkitdownPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.addClass('markitdown-modal');
-		contentEl.createEl('h2', {text: 'Markitdown Setup'});
-		
-		if (!this.plugin.pythonInstalled) {
-			contentEl.createEl('p', {
-				text: 'Python is not installed or not found at the specified path. Please install Python and configure the path in settings.'
-			});
-			
-			const buttonEl = contentEl.createEl('button', {
-				text: 'Go to settings'
-			});
-			
-			buttonEl.addEventListener('click', () => {
-				this.close();
-				// Open settings with proper typing
-				if ('setting' in this.app) {
-					const appWithSetting = this.app as AppWithSetting;
-					appWithSetting.setting.open();
-					appWithSetting.setting.openTabById('obsidian-markitdown');
-				}
-			});
-			
-			return;
-		}
-		
-		contentEl.createEl('p', {
-			text: 'Markitdown is not installed. Would you like to install it now?'
-		});
-		
-		contentEl.createEl('p', {
-			text: 'This will install the Markitdown Python package using pip.'
-		});
-		
-		const buttonContainer = contentEl.createDiv('markitdown-button-container');
-		
-		const cancelButton = buttonContainer.createEl('button', {
-			text: 'Cancel'
-		});
-		
-		cancelButton.addEventListener('click', () => {
-			this.close();
-		});
-		
-		const installButton = buttonContainer.createEl('button', {
-			text: 'Install Markitdown'
-		});
-		
-		installButton.addEventListener('click', async () => {
-			installButton.disabled = true;
-			installButton.setText('Installing...');
-			
-			try {
-				const success = await this.plugin.installMarkitdown();
-				
-				if (success) {
-					new Notice('Markitdown installed successfully!');
-					this.close();
-				} else {
-					contentEl.createEl('p', {
-						text: 'Failed to install Markitdown. Please check the console for errors.'
-					});
-					installButton.disabled = false;
-					installButton.setText('Try Again');
-				}
-			} catch (error) {
-				console.error('Error installing Markitdown:', error);
-				contentEl.createEl('p', {
-					text: `Error: ${error.message}`
-				});
-				installButton.disabled = false;
-				installButton.setText('Try Again');
-			}
-		});
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class MarkitdownSettingTab extends PluginSettingTab {
-	plugin: MarkitdownPlugin;
-
-	constructor(app: App, plugin: MarkitdownPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Python path')
-			.setDesc('Path to python executable (e.g., python, python3, or full path)')
-			.addText(text => text
-				.setPlaceholder('python')
-				.setValue(this.plugin.settings.pythonPath)
-				.onChange(async (value) => {
-					this.plugin.settings.pythonPath = value;
-					await this.plugin.saveSettings();
-					this.plugin.checkDependencies();
-				}));
-
-		new Setting(containerEl)
-			.setName('Enable Markitdown plugins')
-			.setDesc('Enable third-party plugins for markitdown')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enablePlugins)
-				.onChange(async (value) => {
-					this.plugin.settings.enablePlugins = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Azure Document Intelligence endpoint')
-			.setDesc('Optional: Use Azure Document Intelligence for better conversion (requires API key setup)')
-			.addText(text => text
-				.setPlaceholder('https://your-resource.cognitiveservices.azure.com/')
-				.setValue(this.plugin.settings.docintelEndpoint)
-				.onChange(async (value) => {
-					this.plugin.settings.docintelEndpoint = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Output folder')
-			.setDesc('Folder path for converted files (relative to vault root, leave empty for default "markitdown-output")')
-			.addText(text => text
-				.setPlaceholder('markitdown-output')
-				.setValue(this.plugin.settings.outputPath)
-				.onChange(async (value) => {
-					this.plugin.settings.outputPath = value;
-					await this.plugin.saveSettings();
-				}));
-
-		// Status section
-		new Setting(containerEl)
-			.setName('Status')
-			.setHeading();
-		
-		const statusContainer = containerEl.createDiv('markitdown-status-container');
-		
-		// Python status
-		const pythonStatus = statusContainer.createDiv('markitdown-status-item');
-		
-		const pythonIcon = pythonStatus.createSpan();
-		pythonIcon.addClass('markitdown-status-icon');
-		pythonIcon.addClass(this.plugin.pythonInstalled ? 'success' : 'error');
-		pythonIcon.setText(this.plugin.pythonInstalled ? '✓' : '✗');
-		
-		pythonStatus.createSpan().setText(`Python: ${this.plugin.pythonInstalled ? 'Installed' : 'Not installed'}`);
-		
-		// Markitdown status
-		const markitdownStatus = statusContainer.createDiv('markitdown-status-item');
-		
-		const markitdownIcon = markitdownStatus.createSpan();
-		markitdownIcon.addClass('markitdown-status-icon');
-		markitdownIcon.addClass(this.plugin.markitdownInstalled ? 'success' : 'error');
-		markitdownIcon.setText(this.plugin.markitdownInstalled ? '✓' : '✗');
-		
-		markitdownStatus.createSpan().setText(`Markitdown: ${this.plugin.markitdownInstalled ? 'Installed' : 'Not installed'}`);
-		
-		// Install button if Markitdown is not installed
-		if (!this.plugin.markitdownInstalled && this.plugin.pythonInstalled) {
-			const installButton = containerEl.createEl('button', {
-				text: 'Install Markitdown',
-				cls: 'markitdown-install-button'
-			});
-			
-			installButton.addEventListener('click', async () => {
-				installButton.disabled = true;
-				installButton.setText('Installing...');
-				
-				try {
-					const success = await this.plugin.installMarkitdown();
-					
-					if (success) {
-						new Notice('Markitdown installed successfully!');
-						this.display(); // Refresh the settings panel
-					} else {
-						new Notice('Failed to install Markitdown. Please check the console for errors.');
-						installButton.disabled = false;
-						installButton.setText('Try Again');
-					}
-				} catch (error) {
-					console.error('Error installing Markitdown:', error);
-					new Notice(`Error: ${error.message}`);
-					installButton.disabled = false;
-					installButton.setText('Try Again');
-				}
-			});
-		}
 	}
 }
