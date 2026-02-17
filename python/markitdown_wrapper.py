@@ -112,6 +112,9 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.extract_images and not args.image_dir:
+        parser.error("--image-dir is required when --extract-images is specified")
+
     start_time = time.time()
 
     try:
