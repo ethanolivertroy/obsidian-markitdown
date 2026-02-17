@@ -43,7 +43,7 @@ def extract_images_from_markdown(markdown_text: str, image_dir: str) -> tuple[st
 
     def replace_data_uri(match):
         nonlocal count
-        count += 1
+        next_index = count + 1
         alt_text = match.group(1)
         img_format = match.group(2)
         b64_data = match.group(3).replace("\n", "").replace("\r", "").replace(" ", "")
@@ -60,7 +60,7 @@ def extract_images_from_markdown(markdown_text: str, image_dir: str) -> tuple[st
         if ext not in ALLOWED_EXTENSIONS:
             ext = "png"  # safe fallback
 
-        filename = f"image_{count:03d}.{ext}"
+        filename = f"image_{next_index:03d}.{ext}"
         filepath = os.path.join(image_dir, filename)
 
         try:
@@ -70,11 +70,12 @@ def extract_images_from_markdown(markdown_text: str, image_dir: str) -> tuple[st
         except Exception as e:
             # If decoding fails, leave the original data URI
             print(
-                json.dumps({"warning": f"Failed to decode image {count}: {e}"}),
+                json.dumps({"warning": f"Failed to decode image {next_index}: {e}"}),
                 file=sys.stderr,
             )
             return match.group(0)
 
+        count = next_index
         return f"{alt_text}(./{image_dir_name}/{filename})"
 
     updated_markdown = re.sub(pattern, replace_data_uri, markdown_text)
@@ -172,6 +173,17 @@ def main():
                     json.dumps(
                         {
                             "error": f"Invalid plugin-args JSON: {e}",
+                            "type": "ValueError",
+                        }
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            if not isinstance(plugin_kwargs, dict):
+                print(
+                    json.dumps(
+                        {
+                            "error": "plugin-args must be a JSON object (key-value map)",
                             "type": "ValueError",
                         }
                     ),
