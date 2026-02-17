@@ -115,6 +115,31 @@ def main():
     start_time = time.time()
 
     try:
+        # Validate input file exists and is readable
+        if not os.path.isfile(args.input):
+            print(
+                json.dumps(
+                    {
+                        "error": f"Input file does not exist: {os.path.basename(args.input)}",
+                        "type": "FileError",
+                    }
+                ),
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        if not os.access(args.input, os.R_OK):
+            print(
+                json.dumps(
+                    {
+                        "error": f"Input file is not readable: {os.path.basename(args.input)}",
+                        "type": "FileError",
+                    }
+                ),
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         # Set Azure endpoint if provided
         if args.docintel_endpoint:
             os.environ["AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT"] = args.docintel_endpoint
@@ -182,7 +207,9 @@ def main():
             )
 
         # Write output
-        os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
+        output_dir = os.path.dirname(os.path.abspath(args.output))
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(markdown_text)
 

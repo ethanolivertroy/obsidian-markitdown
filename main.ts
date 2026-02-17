@@ -23,9 +23,14 @@ import { FolderConvertModal } from './src/modals/FolderConvertModal';
 import { SetupModal } from './src/modals/SetupModal';
 
 export default class MarkitdownPlugin extends Plugin {
-	settings!: MarkitdownSettings;
-	dependencyStatus!: DependencyStatus;
-	converter!: MarkitdownConverter;
+	settings: MarkitdownSettings = DEFAULT_SETTINGS;
+	dependencyStatus: DependencyStatus = {
+		pythonInstalled: false,
+		pythonVersion: null,
+		markitdownInstalled: false,
+		markitdownVersion: null,
+	};
+	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
 
 	async onload() {
 		await this.loadSettings();
@@ -171,9 +176,11 @@ export default class MarkitdownPlugin extends Plugin {
 
 	/** Convert PluginArgEntry[] to Record for Python. */
 	private pluginArgsToRecord(entries: PluginArgEntry[]): Record<string, unknown> {
-		const record: Record<string, unknown> = {};
+		const record: Record<string, unknown> = Object.create(null);
 		for (const entry of entries) {
 			if (!entry.key.trim()) continue;
+			// Reject prototype pollution keys
+			if (entry.key === '__proto__' || entry.key === 'constructor' || entry.key === 'prototype') continue;
 			// Try to parse as JSON value, fall back to string
 			try {
 				record[entry.key] = JSON.parse(entry.value);

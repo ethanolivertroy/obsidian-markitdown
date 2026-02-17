@@ -50,17 +50,20 @@ export class MarkitdownConverter {
 			const result = await runPythonScript(this.pythonPath, scriptPath, args);
 
 			if (result.exitCode !== 0) {
-				let errorMsg = result.stderr;
+				let errorMsg = 'Unknown error';
 				try {
 					const errJson = JSON.parse(result.stderr);
-					errorMsg = errJson.error || result.stderr;
+					// Use the error type/message from Python, but strip absolute paths
+					errorMsg = errJson.error || 'Unknown error';
 				} catch {
-					// Use raw stderr
+					errorMsg = result.stderr || 'Unknown error';
 				}
+				// Strip absolute paths from error messages to avoid leaking internal paths
+				errorMsg = errorMsg.replace(/(?:\/[\w.-]+)+\//g, '…/');
 
 				return {
 					success: false,
-					error: `Markitdown conversion failed: ${errorMsg}`,
+					error: `Conversion failed: ${errorMsg}`,
 					processingTime: Date.now() - startTime,
 				};
 			}
@@ -90,10 +93,12 @@ export class MarkitdownConverter {
 				imagesExtracted,
 			};
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : String(error);
+			const rawMessage = error instanceof Error ? error.message : String(error);
+			// Strip absolute paths to avoid leaking internal directory structure
+			const message = rawMessage.replace(/(?:\/[\w.-]+)+\//g, '…/');
 			return {
 				success: false,
-				error: `Markitdown conversion error: ${message}`,
+				error: `Conversion error: ${message}`,
 				processingTime: Date.now() - startTime,
 			};
 		}

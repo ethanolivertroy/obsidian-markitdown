@@ -126,7 +126,7 @@ export class FolderConvertModal extends Modal {
 
 			try {
 				const buffer = await file.arrayBuffer();
-				fs.writeFileSync(tempFilePath, Buffer.from(buffer));
+				await fs.promises.writeFile(tempFilePath, Buffer.from(buffer));
 
 				const result = await this.plugin.convertExternalFile(tempFilePath, outputPath);
 
@@ -141,17 +141,12 @@ export class FolderConvertModal extends Modal {
 				const msg = error instanceof Error ? error.message : String(error);
 				errors.push(`${file.name}: ${msg}`);
 			} finally {
-				if (fs.existsSync(tempFilePath)) {
-					fs.unlinkSync(tempFilePath);
-				}
+				await fs.promises.unlink(tempFilePath).catch(() => {});
 			}
 
 			// Update progress after conversion completes so counts are accurate
 			progressModal?.updateProgress(i + 1, file.name, success, failed);
 		}
-
-		// Refresh vault
-		await this.app.vault.adapter.list(outputFolder);
 
 		if (progressModal) {
 			progressModal.complete(success, failed);

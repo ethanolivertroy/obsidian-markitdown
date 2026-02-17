@@ -105,8 +105,9 @@ export async function checkDependencies(
 
 				return { status, resolvedPythonPath: tryPath };
 			}
-		} catch {
-			// This path didn't work, try next
+		} catch (err) {
+			// This path didn't work — log for debugging, try next
+			console.debug(`markitdown: ${tryPath} failed:`, err);
 			continue;
 		}
 	}

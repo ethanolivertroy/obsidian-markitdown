@@ -58,7 +58,7 @@ export class FileConvertModal extends Modal {
 				const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 				const tempFilePath = path.join(outputFolder, `tmp_${Date.now()}_${safeName}`);
 				const buffer = await file.arrayBuffer();
-				fs.writeFileSync(tempFilePath, Buffer.from(buffer));
+				await fs.promises.writeFile(tempFilePath, Buffer.from(buffer));
 
 				try {
 					const result = await this.plugin.convertExternalFile(tempFilePath, outputPath);
@@ -77,9 +77,7 @@ export class FileConvertModal extends Modal {
 					}
 				} finally {
 					// Clean up temp file
-					if (fs.existsSync(tempFilePath)) {
-						fs.unlinkSync(tempFilePath);
-					}
+					await fs.promises.unlink(tempFilePath).catch(() => {});
 				}
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);

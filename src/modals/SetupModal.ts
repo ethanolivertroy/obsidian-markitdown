@@ -43,9 +43,11 @@ export class SetupModal extends Modal {
 		const settingsBtn = buttonContainer.createEl('button', { text: 'Open settings' });
 		settingsBtn.addEventListener('click', () => {
 			this.close();
-			// @ts-expect-error — Obsidian internal API for opening settings
+			// No public API exists to open the settings tab to a specific plugin.
+			// app.setting is an internal Obsidian API — may break in future versions.
+			// @ts-expect-error — Obsidian internal API: no public method to open settings
 			this.app.setting?.open();
-			// @ts-expect-error
+			// @ts-expect-error — Obsidian internal API: no public method to navigate to plugin tab
 			this.app.setting?.openTabById(this.plugin.manifest.id);
 		});
 	}
