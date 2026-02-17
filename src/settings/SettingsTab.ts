@@ -28,6 +28,8 @@ export class SettingsTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.pythonPath = value;
 					await this.plugin.saveSettings();
+					await this.plugin.refreshDependencies();
+					this.display();
 				}));
 
 		// ── Conversion ──────────────────────────

@@ -31,6 +31,7 @@ export default class MarkitdownPlugin extends Plugin {
 		markitdownVersion: null,
 	};
 	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
+	private resolvedPythonPath = 'python';
 
 	async onload() {
 		await this.loadSettings();
@@ -39,8 +40,8 @@ export default class MarkitdownPlugin extends Plugin {
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
 		// Use the resolved python path (handles python→python3 fallback)
-		const resolvedPython = depCheck.resolvedPythonPath;
-		this.converter = new MarkitdownConverter(resolvedPython, pluginDir);
+		this.resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 
 		// Ribbon icon
 		this.addRibbonIcon('file-text', 'Convert to Markdown', () => {
@@ -211,11 +212,11 @@ export default class MarkitdownPlugin extends Plugin {
 		return path.resolve(this.manifest.dir ?? '.');
 	}
 
-	/** Install markitdown package. */
+	/** Install markitdown package using the resolved Python path. */
 	async installMarkitdown(onProgress?: (line: string) => void): Promise<boolean> {
 		const pluginDir = this.getPluginDir();
 		const success = await installPackage(
-			this.settings.pythonPath,
+			this.resolvedPythonPath,
 			pluginDir,
 			'markitdown[all]',
 			onProgress
@@ -226,12 +227,13 @@ export default class MarkitdownPlugin extends Plugin {
 		return success;
 	}
 
-	/** Refresh dependency status. */
+	/** Refresh dependency status and resolved Python path. */
 	async refreshDependencies(): Promise<void> {
 		const pluginDir = this.getPluginDir();
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
-		this.converter = new MarkitdownConverter(depCheck.resolvedPythonPath, pluginDir);
+		this.resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 	}
 
 	async loadSettings() {

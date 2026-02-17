@@ -84,7 +84,7 @@ This plugin acts as a bridge between Obsidian and Microsoft's Markitdown Python 
 
 ## Manually installing the plugin
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/markitdown/`
+- Copy over `main.js`, `styles.css`, `manifest.json`, and the `python/` directory to your vault `VaultFolder/.obsidian/plugins/markitdown/`
 
 ## Credits
 
