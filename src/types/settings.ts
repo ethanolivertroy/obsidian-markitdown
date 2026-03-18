@@ -1,3 +1,13 @@
+export interface ConversionLogEntry {
+	inputFile: string;
+	outputFile: string;
+	timestamp: string; // ISO 8601
+	success: boolean;
+	error?: string;
+	processingTimeMs?: number;
+	imagesExtracted?: number;
+}
+
 export interface PluginArgEntry {
 	key: string;
 	value: string;
@@ -13,6 +23,7 @@ export interface MarkitdownSettings {
 	imageSubfolderTemplate: string;
 	enableBatchProgress: boolean;
 	enableContextMenu: boolean;
+	conversionHistory: ConversionLogEntry[];
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -25,6 +36,7 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	imageSubfolderTemplate: '{filename}-images',
 	enableBatchProgress: true,
 	enableContextMenu: true,
+	conversionHistory: [],
 };
 
 export interface ConversionOptions {
