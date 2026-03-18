@@ -188,7 +188,23 @@ export class SettingsTab extends PluginSettingTab {
 			dep.markitdownVersion ? `v${dep.markitdownVersion}` : undefined
 		);
 
-		// Install button
+		// Resolved path hint (when Python is found)
+		if (dep.pythonInstalled) {
+			const hint = statusContainer.createDiv('markitdown-resolved-path-hint');
+			hint.setText(`Using: ${this.plugin.resolvedPythonPath}`);
+		}
+
+		// ── Troubleshooting: Python NOT installed ──
+		if (!dep.pythonInstalled) {
+			this.renderPythonTroubleshooting(containerEl);
+		}
+
+		// ── Troubleshooting: Python installed but markitdown missing ──
+		if (dep.pythonInstalled && !dep.markitdownInstalled) {
+			this.renderMarkitdownTroubleshooting(containerEl);
+		}
+
+		// Install button (when Python exists but markitdown doesn't)
 		if (!dep.markitdownInstalled && dep.pythonInstalled) {
 			const installBtn = containerEl.createEl('button', {
 				text: 'Install Markitdown',
@@ -229,6 +245,86 @@ export class SettingsTab extends PluginSettingTab {
 			refreshBtn.setText('Checking...');
 			await this.plugin.refreshDependencies();
 			this.display();
+		});
+	}
+
+	private renderPythonTroubleshooting(containerEl: HTMLElement) {
+		const details = containerEl.createEl('details', {
+			cls: 'markitdown-troubleshooting',
+		});
+		details.createEl('summary', { text: 'Troubleshooting: Python not found' });
+
+		const content = details.createDiv('markitdown-troubleshooting-content');
+
+		// Tried paths list
+		const log = this.plugin.pythonDiscoveryLog;
+		if (log.length > 0) {
+			content.createEl('p', {
+				text: 'The following paths were checked:',
+				cls: 'markitdown-troubleshooting-label',
+			});
+			const list = content.createEl('ul', { cls: 'markitdown-tried-paths' });
+			for (const entry of log) {
+				const li = list.createEl('li');
+				const pathSpan = li.createEl('code', { text: entry.path });
+				if (entry.error) {
+					li.createSpan({
+						text: ` \u2014 ${entry.error}`,
+						cls: 'markitdown-tried-path-error',
+					});
+				}
+			}
+		}
+
+		// Download link
+		const downloadP = content.createEl('p');
+		downloadP.createSpan({ text: 'Download Python from ' });
+		downloadP.createEl('a', {
+			text: 'python.org',
+			href: 'https://www.python.org/downloads/',
+		});
+
+		// Platform-specific example path
+		const isWin = process.platform === 'win32';
+		const examplePath = isWin
+			? 'C:\\Python311\\python.exe'
+			: '/usr/local/bin/python3';
+		content.createEl('p', {
+			text: `Example path for your platform: `,
+			cls: 'markitdown-troubleshooting-label',
+		}).createEl('code', { text: examplePath });
+	}
+
+	private renderMarkitdownTroubleshooting(containerEl: HTMLElement) {
+		const details = containerEl.createEl('details', {
+			cls: 'markitdown-troubleshooting',
+		});
+		details.createEl('summary', { text: 'Troubleshooting: markitdown not installed' });
+
+		const content = details.createDiv('markitdown-troubleshooting-content');
+
+		content.createEl('p', {
+			text: 'Python was found, but the markitdown package is not installed. Run this command to install it:',
+		});
+
+		const cmdContainer = content.createDiv('markitdown-pip-command');
+		const pipCmd = `${this.plugin.resolvedPythonPath} -m pip install "markitdown[all]"`;
+		cmdContainer.createEl('code', { text: pipCmd });
+
+		const copyBtn = cmdContainer.createEl('button', {
+			text: 'Copy',
+			cls: 'markitdown-copy-button',
+		});
+		copyBtn.addEventListener('click', () => {
+			navigator.clipboard.writeText(pipCmd).then(() => {
+				copyBtn.setText('Copied!');
+				setTimeout(() => copyBtn.setText('Copy'), 2000);
+			});
+		});
+
+		content.createEl('p', {
+			text: 'Or use the "Install Markitdown" button below.',
+			cls: 'markitdown-troubleshooting-hint',
 		});
 	}
 

@@ -7,6 +7,7 @@ import {
 	ConversionResult,
 	DependencyStatus,
 	PluginArgEntry,
+	TriedPath,
 } from './src/types/settings';
 import { MarkitdownConverter } from './src/converter/MarkitdownConverter';
 import { checkDependencies, installPackage } from './src/utils/python';
@@ -31,7 +32,12 @@ export default class MarkitdownPlugin extends Plugin {
 		markitdownVersion: null,
 	};
 	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
-	private resolvedPythonPath = 'python';
+	pythonDiscoveryLog: TriedPath[] = [];
+	private _resolvedPythonPath = 'python';
+
+	get resolvedPythonPath(): string {
+		return this._resolvedPythonPath;
+	}
 
 	async onload() {
 		await this.loadSettings();
@@ -39,9 +45,10 @@ export default class MarkitdownPlugin extends Plugin {
 		const pluginDir = this.getPluginDir();
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
+		this.pythonDiscoveryLog = depCheck.triedPaths;
 		// Use the resolved python path (handles python→python3 fallback)
-		this.resolvedPythonPath = depCheck.resolvedPythonPath;
-		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
+		this._resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this._resolvedPythonPath, pluginDir);
 
 		// Ribbon icon
 		this.addRibbonIcon('file-text', 'Convert to Markdown', () => {
@@ -216,7 +223,7 @@ export default class MarkitdownPlugin extends Plugin {
 	async installMarkitdown(onProgress?: (line: string) => void): Promise<boolean> {
 		const pluginDir = this.getPluginDir();
 		const success = await installPackage(
-			this.resolvedPythonPath,
+			this._resolvedPythonPath,
 			pluginDir,
 			'markitdown[all]',
 			onProgress
@@ -232,8 +239,9 @@ export default class MarkitdownPlugin extends Plugin {
 		const pluginDir = this.getPluginDir();
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
-		this.resolvedPythonPath = depCheck.resolvedPythonPath;
-		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
+		this.pythonDiscoveryLog = depCheck.triedPaths;
+		this._resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this._resolvedPythonPath, pluginDir);
 	}
 
 	async loadSettings() {

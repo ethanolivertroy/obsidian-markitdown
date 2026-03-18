@@ -49,3 +49,8 @@ export interface DependencyStatus {
 	markitdownInstalled: boolean;
 	markitdownVersion: string | null;
 }
+
+export interface TriedPath {
+	path: string;
+	error: string;
+}
