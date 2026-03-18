@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert files to Markdown using Microsoft's Markitdown.
+"""Convert files or URLs to Markdown using Microsoft's Markitdown.
 
 All arguments are passed via argparse — no string interpolation of user input.
 This script is called from TypeScript via child_process.spawn() with shell=false.
@@ -13,6 +13,12 @@ Usage:
         [--docintel-endpoint https://...] \
         [--extract-images] \
         [--image-dir /path/to/images/]
+
+    python markitdown_wrapper.py \
+        --url https://www.youtube.com/watch?v=... \
+        --output /path/to/output.md \
+        [--enable-plugins] \
+        [--plugin-args '{"key": "value"}']
 
 stdout: JSON {"success": true, "images_extracted": N}
 stderr: JSON {"error": "message"} on failure
@@ -86,7 +92,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Convert files to Markdown using Markitdown"
     )
-    parser.add_argument("--input", required=True, help="Input file path")
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument("--input", help="Input file path")
+    source_group.add_argument("--url", help="URL to convert (e.g. YouTube URL)")
     parser.add_argument("--output", required=True, help="Output markdown file path")
     parser.add_argument(
         "--enable-plugins",
@@ -119,30 +127,48 @@ def main():
     start_time = time.time()
 
     try:
-        # Validate input file exists and is readable
-        if not os.path.isfile(args.input):
-            print(
-                json.dumps(
-                    {
-                        "error": f"Input file does not exist: {os.path.basename(args.input)}",
-                        "type": "FileError",
-                    }
-                ),
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        # Determine source: file or URL
+        source = args.url if args.url else args.input
 
-        if not os.access(args.input, os.R_OK):
-            print(
-                json.dumps(
-                    {
-                        "error": f"Input file is not readable: {os.path.basename(args.input)}",
-                        "type": "FileError",
-                    }
-                ),
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        # Validate input file exists and is readable (file mode only)
+        if args.input:
+            if not os.path.isfile(args.input):
+                print(
+                    json.dumps(
+                        {
+                            "error": f"Input file does not exist: {os.path.basename(args.input)}",
+                            "type": "FileError",
+                        }
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+            if not os.access(args.input, os.R_OK):
+                print(
+                    json.dumps(
+                        {
+                            "error": f"Input file is not readable: {os.path.basename(args.input)}",
+                            "type": "FileError",
+                        }
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        # Validate URL (URL mode only)
+        if args.url:
+            if not args.url.startswith(("http://", "https://")):
+                print(
+                    json.dumps(
+                        {
+                            "error": "URL must start with http:// or https://",
+                            "type": "ValueError",
+                        }
+                    ),
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
         # Set Azure endpoint if provided
         if args.docintel_endpoint:
@@ -198,8 +224,8 @@ def main():
 
         converter = MarkItDown(**converter_kwargs)
 
-        # Convert the file
-        result = converter.convert(args.input, **plugin_kwargs)
+        # Convert the file or URL
+        result = converter.convert(source, **plugin_kwargs)
         markdown_text = result.text_content
 
         if not markdown_text:

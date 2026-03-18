@@ -19,6 +19,74 @@ export class MarkitdownConverter {
 		return this.getSupportedExtensions().includes(normalized);
 	}
 
+	async convertUrl(
+		url: string,
+		outputPath: string,
+		options?: ConversionOptions
+	): Promise<ConversionResult> {
+		const startTime = Date.now();
+		const scriptPath = getPythonScriptPath('markitdown_wrapper.py', this.pluginDir);
+
+		// Build argument array — never string interpolation
+		const args: string[] = ['--url', url, '--output', outputPath];
+
+		if (options?.enablePlugins) {
+			args.push('--enable-plugins');
+		}
+
+		if (options?.pluginArgs && Object.keys(options.pluginArgs).length > 0) {
+			args.push('--plugin-args', JSON.stringify(options.pluginArgs));
+		}
+
+		if (options?.docintelEndpoint) {
+			args.push('--docintel-endpoint', options.docintelEndpoint);
+		}
+
+		try {
+			const result = await runPythonScript(this.pythonPath, scriptPath, args);
+
+			if (result.exitCode !== 0) {
+				let errorMsg = 'Unknown error';
+				try {
+					const errJson = JSON.parse(result.stderr);
+					errorMsg = errJson.error || 'Unknown error';
+				} catch {
+					errorMsg = result.stderr || 'Unknown error';
+				}
+				errorMsg = errorMsg.replace(/(?:\/[\w.-]+)+\//g, '\u2026/');
+
+				return {
+					success: false,
+					error: `Conversion failed: ${errorMsg}`,
+					processingTime: Date.now() - startTime,
+				};
+			}
+
+			// Verify output file exists
+			if (!fs.existsSync(outputPath)) {
+				return {
+					success: false,
+					error: 'Output file was not created',
+					processingTime: Date.now() - startTime,
+				};
+			}
+
+			return {
+				success: true,
+				outputPath,
+				processingTime: Date.now() - startTime,
+			};
+		} catch (error: unknown) {
+			const rawMessage = error instanceof Error ? error.message : String(error);
+			const message = rawMessage.replace(/(?:\/[\w.-]+)+\//g, '\u2026/');
+			return {
+				success: false,
+				error: `Conversion error: ${message}`,
+				processingTime: Date.now() - startTime,
+			};
+		}
+	}
+
 	async convert(
 		inputPath: string,
 		outputPath: string,
