@@ -4,13 +4,32 @@ import { PluginArgsEditor } from './PluginArgsEditor';
 
 export class SettingsTab extends PluginSettingTab {
 	plugin: MarkitdownPlugin;
+	private pythonPathDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(app: App, plugin: MarkitdownPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
+	hide(): void {
+		if (this.pythonPathDebounceTimer) {
+			clearTimeout(this.pythonPathDebounceTimer);
+			this.pythonPathDebounceTimer = null;
+			// Settings were already saved on keystroke; fire the dependency
+			// refresh so status is current when the user reopens settings.
+			this.plugin.refreshDependencies().catch(console.error);
+		}
+	}
+
+	private cancelPythonPathDebounce(): void {
+		if (this.pythonPathDebounceTimer) {
+			clearTimeout(this.pythonPathDebounceTimer);
+			this.pythonPathDebounceTimer = null;
+		}
+	}
+
 	display(): void {
+		this.cancelPythonPathDebounce();
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -21,15 +40,24 @@ export class SettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Python path')
-			.setDesc('Path to Python executable (e.g., python, python3, or a full path)')
+			.setDesc('Path to Python executable (e.g., python, python3, or a full path like C:\\Python311\\python.exe)')
 			.addText(text => text
 				.setPlaceholder('python')
 				.setValue(this.plugin.settings.pythonPath)
 				.onChange(async (value) => {
 					this.plugin.settings.pythonPath = value;
 					await this.plugin.saveSettings();
-					await this.plugin.refreshDependencies();
-					this.display();
+					// Debounce: wait for user to stop typing before checking
+					if (this.pythonPathDebounceTimer) {
+						clearTimeout(this.pythonPathDebounceTimer);
+					}
+					this.pythonPathDebounceTimer = setTimeout(async () => {
+						this.pythonPathDebounceTimer = null;
+						await this.plugin.refreshDependencies();
+						if (this.containerEl.isConnected) {
+							this.display();
+						}
+					}, 1500);
 				}));
 
 		// ── Conversion ──────────────────────────

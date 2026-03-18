@@ -14,8 +14,21 @@ import json
 import sys
 
 
+ALLOWED_PACKAGES = {"markitdown"}
+
+
 def check_package(name: str) -> dict:
-    """Check if a Python package is installed and return its version."""
+    """Check if a Python package is installed, importable, and return its version."""
+    if name not in ALLOWED_PACKAGES:
+        return {"installed": False, "version": None}
+
+    # Verify the package can actually be imported (not just metadata)
+    if name == "markitdown":
+        try:
+            from markitdown import MarkItDown  # noqa: F401
+        except (ImportError, AttributeError, TypeError):
+            return {"installed": False, "version": None}
+
     try:
         from importlib.metadata import version, PackageNotFoundError
         try:
