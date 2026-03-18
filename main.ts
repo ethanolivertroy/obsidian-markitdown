@@ -22,6 +22,7 @@ import {
 } from './src/utils/paths';
 import { isConvertible } from './src/utils/fileTypes';
 import { addHistoryEntry } from './src/utils/history';
+import { ensurePythonScripts } from './src/utils/bundledScripts';
 import { SettingsTab } from './src/settings/SettingsTab';
 import { FileConvertModal } from './src/modals/FileConvertModal';
 import { FolderConvertModal } from './src/modals/FolderConvertModal';
@@ -51,6 +52,11 @@ export default class MarkitdownPlugin extends Plugin {
 		await this.loadSettings();
 
 		const pluginDir = this.getPluginDir();
+
+		// Ensure bundled Python scripts exist on disk (community plugin installs
+		// only include main.js, manifest.json, and styles.css — no python/ dir)
+		await ensurePythonScripts(pluginDir);
+
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
 		this.pythonDiscoveryLog = depCheck.triedPaths;
