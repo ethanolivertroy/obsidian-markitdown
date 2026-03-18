@@ -290,6 +290,10 @@ Styles for the Markitdown Obsidian plugin
 .markitdown-preview-modal {
   width: 80vw;
   max-width: 900px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .markitdown-preview-meta {
@@ -313,13 +317,20 @@ Styles for the Markitdown Obsidian plugin
 }
 
 .markitdown-preview-content {
-  max-height: 50vh;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   background-color: var(--background-primary-alt);
   padding: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.markitdown-preview-modal .markitdown-button-container {
+  flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
 .markitdown-preview-content pre {
