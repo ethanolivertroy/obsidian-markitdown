@@ -176,6 +176,115 @@ Styles for the Markitdown Obsidian plugin
   font-weight: 500;
 }
 
+/* Resolved path hint */
+.markitdown-resolved-path-hint {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-family: var(--font-monospace);
+}
+
+/* Troubleshooting section (collapsible) */
+.markitdown-troubleshooting {
+  margin: 12px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.markitdown-troubleshooting summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-muted);
+  background-color: var(--background-secondary);
+  user-select: none;
+}
+
+.markitdown-troubleshooting summary:hover {
+  color: var(--text-normal);
+}
+
+.markitdown-troubleshooting-content {
+  padding: 12px 14px;
+}
+
+.markitdown-troubleshooting-content p {
+  margin: 6px 0;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.markitdown-troubleshooting-label {
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.markitdown-tried-paths {
+  list-style: none;
+  padding-left: 0;
+  margin: 6px 0;
+}
+
+.markitdown-tried-paths li {
+  padding: 4px 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.markitdown-tried-paths li:last-child {
+  border-bottom: none;
+}
+
+.markitdown-tried-paths code {
+  background-color: var(--background-primary-alt);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.95em;
+}
+
+.markitdown-tried-path-error {
+  color: var(--text-faint);
+}
+
+.markitdown-pip-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background-color: var(--background-primary-alt);
+  border-radius: 4px;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+}
+
+.markitdown-pip-command code {
+  flex: 1;
+  word-break: break-all;
+}
+
+.markitdown-copy-button {
+  flex-shrink: 0;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.markitdown-copy-button:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+.markitdown-troubleshooting-hint {
+  font-style: italic;
+  color: var(--text-faint);
+}
+
 /* Plugin args editor */
 .markitdown-plugin-args-container {
   margin: 8px 0 16px;

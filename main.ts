@@ -7,6 +7,7 @@ import {
 	ConversionResult,
 	DependencyStatus,
 	PluginArgEntry,
+	TriedPath,
 } from './src/types/settings';
 import { MarkitdownConverter } from './src/converter/MarkitdownConverter';
 import { checkDependencies, installPackage } from './src/utils/python';
@@ -32,6 +33,7 @@ export default class MarkitdownPlugin extends Plugin {
 		markitdownVersion: null,
 	};
 	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
+	pythonDiscoveryLog: TriedPath[] = [];
 	private _resolvedPythonPath = 'python';
 
 	/** The Python path actually used after discovery/fallback resolution. */
@@ -45,6 +47,7 @@ export default class MarkitdownPlugin extends Plugin {
 		const pluginDir = this.getPluginDir();
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
+		this.pythonDiscoveryLog = depCheck.triedPaths;
 		// Use the resolved python path (handles python→python3 fallback)
 		this._resolvedPythonPath = depCheck.resolvedPythonPath;
 		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
@@ -237,7 +240,7 @@ export default class MarkitdownPlugin extends Plugin {
 	async installMarkitdown(onProgress?: (line: string) => void): Promise<boolean> {
 		const pluginDir = this.getPluginDir();
 		const success = await installPackage(
-			this.resolvedPythonPath,
+			this._resolvedPythonPath,
 			pluginDir,
 			'markitdown[all]',
 			onProgress
@@ -253,6 +256,7 @@ export default class MarkitdownPlugin extends Plugin {
 		const pluginDir = this.getPluginDir();
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
+		this.pythonDiscoveryLog = depCheck.triedPaths;
 		this._resolvedPythonPath = depCheck.resolvedPythonPath;
 		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 	}

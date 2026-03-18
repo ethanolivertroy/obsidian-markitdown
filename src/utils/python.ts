@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
-import { DependencyStatus } from '../types/settings';
+import { DependencyStatus, TriedPath } from '../types/settings';
 
 interface PythonResult {
 	stdout: string;
@@ -70,7 +70,7 @@ export function getPythonScriptPath(scriptName: string, pluginDir: string): stri
 export async function checkDependencies(
 	pythonPath: string,
 	pluginDir: string
-): Promise<{ status: DependencyStatus; resolvedPythonPath: string }> {
+): Promise<{ status: DependencyStatus; resolvedPythonPath: string; triedPaths: TriedPath[] }> {
 	const status: DependencyStatus = {
 		pythonInstalled: false,
 		pythonVersion: null,
@@ -78,10 +78,13 @@ export async function checkDependencies(
 		markitdownVersion: null,
 	};
 
+	const triedPaths: TriedPath[] = [];
+
 	// Guard against empty or whitespace-only paths
 	const trimmed = pythonPath.trim();
 	if (!trimmed) {
-		return { status, resolvedPythonPath: pythonPath };
+		triedPaths.push({ path: pythonPath || '(empty)', error: 'Path is empty or whitespace-only' });
+		return { status, resolvedPythonPath: pythonPath, triedPaths };
 	}
 
 	const scriptPath = getPythonScriptPath('check_install.py', pluginDir);
@@ -153,22 +156,32 @@ export async function checkDependencies(
 
 				// If this Python has markitdown, use it immediately
 				if (depStatus.markitdownInstalled) {
-					return { status: depStatus, resolvedPythonPath: tryPath };
+					triedPaths.push({ path: tryPath, error: '' });
+					return { status: depStatus, resolvedPythonPath: tryPath, triedPaths };
 				}
 
 				// Otherwise, remember the first working Python as a fallback
+				triedPaths.push({ path: tryPath, error: 'Python found but markitdown not installed' });
 				if (!firstWorkingPython) {
 					firstWorkingPython = { status: depStatus, resolvedPythonPath: tryPath };
 				}
+			} else {
+				const detail = result.stderr || `exit code ${result.exitCode}`;
+				triedPaths.push({ path: tryPath, error: `Check script failed: ${detail}` });
 			}
 		} catch (err) {
+			const errMsg = err instanceof Error ? err.message : String(err);
+			triedPaths.push({ path: tryPath, error: errMsg });
 			console.debug(`markitdown: ${tryPath} failed:`, err);
 			continue;
 		}
 	}
 
 	// No Python with markitdown found — return the first working Python (or the default)
-	return firstWorkingPython ?? { status, resolvedPythonPath: pythonPath };
+	if (firstWorkingPython) {
+		return { ...firstWorkingPython, triedPaths };
+	}
+	return { status, resolvedPythonPath: pythonPath, triedPaths };
 }
 
 /**
