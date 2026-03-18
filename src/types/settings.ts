@@ -13,6 +13,8 @@ export interface MarkitdownSettings {
 	imageSubfolderTemplate: string;
 	enableBatchProgress: boolean;
 	enableContextMenu: boolean;
+	enableAutoFrontmatter: boolean;
+	autoTags: string;
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -25,6 +27,8 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	imageSubfolderTemplate: '{filename}-images',
 	enableBatchProgress: true,
 	enableContextMenu: true,
+	enableAutoFrontmatter: false,
+	autoTags: '',
 };
 
 export interface ConversionOptions {
@@ -33,6 +37,10 @@ export interface ConversionOptions {
 	docintelEndpoint?: string;
 	extractImages?: boolean;
 	imageDir?: string;
+	postProcess?: {
+		settings: MarkitdownSettings;
+		inputPath: string;
+	};
 }
 
 export interface ConversionResult {
