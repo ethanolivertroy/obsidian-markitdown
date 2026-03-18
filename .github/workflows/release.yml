@@ -1,0 +1,67 @@
+name: Release Obsidian Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Determine if beta release
+        id: check_beta
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$TAG" == *"beta"* ]]; then
+            echo "is_beta=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_beta=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release (stable)
+        if: steps.check_beta.outputs.is_beta == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.check_beta.outputs.tag }}
+          name: ${{ steps.check_beta.outputs.tag }}
+          draft: false
+          prerelease: false
+          files: |
+            main.js
+            styles.css
+            manifest.json
+
+      - name: Create GitHub Release (beta)
+        if: steps.check_beta.outputs.is_beta == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.check_beta.outputs.tag }}
+          name: ${{ steps.check_beta.outputs.tag }}
+          draft: false
+          prerelease: true
+          files: |
+            main.js
+            styles.css
+            manifest.json
+            manifest-beta.json
