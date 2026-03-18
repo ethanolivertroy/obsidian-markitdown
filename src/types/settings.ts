@@ -15,6 +15,7 @@ export interface MarkitdownSettings {
 	enableContextMenu: boolean;
 	enableRecursiveConversion: boolean;
 	outputFilenameTemplate: string;
+	enableDragDrop: boolean;
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	enableContextMenu: true,
 	enableRecursiveConversion: false,
 	outputFilenameTemplate: '{filename}',
+	enableDragDrop: true,
 };
 
 export interface ConversionOptions {

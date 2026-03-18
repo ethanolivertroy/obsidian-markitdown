@@ -1,5 +1,6 @@
-import { Notice, Plugin, TFile } from 'obsidian';
+import { Notice, Plugin, TFile, MarkdownView, MarkdownFileInfo, Editor } from 'obsidian';
 import * as path from 'path';
+import * as fs from 'fs';
 import {
 	MarkitdownSettings,
 	DEFAULT_SETTINGS,
@@ -82,6 +83,11 @@ export default class MarkitdownPlugin extends Plugin {
 			this.registerFileMenu();
 		}
 
+		// Drag-and-drop conversion
+		if (this.settings.enableDragDrop) {
+			this.registerDropHandler();
+		}
+
 		// Settings tab
 		this.addSettingTab(new SettingsTab(this.app, this));
 	}
@@ -131,6 +137,86 @@ export default class MarkitdownPlugin extends Plugin {
 				});
 			})
 		);
+	}
+
+	/** Register drag-and-drop handler for converting dropped files. */
+	private registerDropHandler() {
+		this.registerEvent(
+			this.app.workspace.on('editor-drop', (evt: DragEvent, editor: Editor, info: MarkdownView | MarkdownFileInfo) => {
+				const files = evt.dataTransfer?.files;
+				if (!files || files.length === 0) return;
+
+				// Check if any dropped file is convertible
+				const convertibleFiles: File[] = [];
+				for (let i = 0; i < files.length; i++) {
+					const file = files[i];
+					const ext = path.extname(file.name).toLowerCase().replace(/^\./, '');
+					if (isConvertible(ext)) {
+						convertibleFiles.push(file);
+					}
+				}
+
+				if (convertibleFiles.length === 0) return;
+
+				// Intercept the event for convertible files
+				evt.preventDefault();
+
+				// Process each convertible file asynchronously
+				for (const file of convertibleFiles) {
+					this.handleDroppedFile(file, editor).catch((error) => {
+						const msg = error instanceof Error ? error.message : String(error);
+						new Notice(`Drop conversion error: ${msg}`);
+					});
+				}
+			})
+		);
+	}
+
+	/** Handle a single dropped file: write to temp, convert, insert link, clean up. */
+	private async handleDroppedFile(file: File, editor: Editor): Promise<void> {
+		const vaultPath = getVaultBasePath(this.app);
+		if (!vaultPath) {
+			new Notice('Could not determine vault path. This plugin requires a local vault.');
+			return;
+		}
+
+		if (!this.dependencyStatus.markitdownInstalled) {
+			new SetupModal(this.app, this).open();
+			return;
+		}
+
+		new Notice(`Converting dropped file: ${file.name}...`);
+
+		const outputFolder = resolveOutputFolder(vaultPath, this.settings.outputPath);
+		const baseName = path.basename(file.name, path.extname(file.name));
+		const outputPath = path.join(outputFolder, `${baseName}.md`);
+
+		// Write the DOM File to a temp file on disk
+		const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+		const tempFilePath = path.join(outputFolder, `tmp_${Date.now()}_${safeName}`);
+		const buffer = await file.arrayBuffer();
+		await fs.promises.writeFile(tempFilePath, Buffer.from(buffer));
+
+		try {
+			const result = await this.convertExternalFile(tempFilePath, outputPath);
+
+			if (result.success) {
+				const relativePath = toVaultRelative(outputPath, vaultPath);
+				const linkText = `[[${relativePath.replace(/\.md$/, '')}]]`;
+				const cursor = editor.getCursor();
+				editor.replaceRange(linkText, cursor);
+
+				const msg = result.imagesExtracted
+					? `Converted ${file.name} (${result.imagesExtracted} images extracted)`
+					: `Converted ${file.name} successfully`;
+				new Notice(msg);
+			} else {
+				new Notice(`Conversion failed for ${file.name}: ${result.error}`);
+			}
+		} finally {
+			// Clean up temp file
+			await fs.promises.unlink(tempFilePath).catch(() => {});
+		}
 	}
 
 	/** Convert a file that already exists in the vault (from context menu). */
