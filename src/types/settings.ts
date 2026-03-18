@@ -1,3 +1,13 @@
+export interface ConversionLogEntry {
+	inputFile: string;
+	outputFile: string;
+	timestamp: string; // ISO 8601
+	success: boolean;
+	error?: string;
+	processingTimeMs?: number;
+	imagesExtracted?: number;
+}
+
 export interface PluginArgEntry {
 	key: string;
 	value: string;
@@ -18,6 +28,7 @@ export interface MarkitdownSettings {
 	enableDragDrop: boolean;
 	enableAutoFrontmatter: boolean;
 	autoTags: string;
+	conversionHistory: ConversionLogEntry[];
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -35,6 +46,7 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	enableDragDrop: true,
 	enableAutoFrontmatter: false,
 	autoTags: '',
+	conversionHistory: [],
 };
 
 export interface ConversionOptions {

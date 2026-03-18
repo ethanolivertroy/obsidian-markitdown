@@ -14,5 +14,5 @@
 		"lib": ["DOM", "ES2020"]
 	},
 	"include": ["main.ts", "src/**/*.ts"],
-	"exclude": ["node_modules", "python"]
+	"exclude": ["node_modules", "python", "src/**/__tests__/**", "src/__mocks__/**", "jest.config.js"]
 }

@@ -384,3 +384,79 @@ Styles for the Markitdown Obsidian plugin
   color: var(--text-normal);
   border-color: var(--interactive-accent);
 }
+
+/* Conversion history modal */
+.markitdown-history-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 12px 0;
+}
+
+.markitdown-history-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.markitdown-history-entry {
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background-color: var(--background-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--background-modifier-border);
+}
+
+.markitdown-history-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.markitdown-history-timestamp {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.markitdown-history-badge {
+  font-size: 0.75em;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.markitdown-history-badge-success {
+  background-color: var(--background-modifier-success);
+  color: var(--interactive-success);
+}
+
+.markitdown-history-badge-fail {
+  background-color: var(--background-modifier-error);
+  color: var(--text-error);
+}
+
+.markitdown-history-filename {
+  font-weight: 500;
+  font-size: 0.95em;
+  margin-bottom: 2px;
+  word-break: break-all;
+}
+
+.markitdown-history-details {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.markitdown-history-error {
+  font-size: 0.8em;
+  color: var(--text-error);
+  margin-top: 4px;
+  padding: 4px 8px;
+  background-color: var(--background-primary-alt);
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.markitdown-history-clear-btn {
+  background-color: var(--background-modifier-error) !important;
+  color: var(--text-error) !important;
+}

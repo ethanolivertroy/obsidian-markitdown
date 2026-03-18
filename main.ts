@@ -6,6 +6,7 @@ import {
 	DEFAULT_SETTINGS,
 	ConversionOptions,
 	ConversionResult,
+	ConversionLogEntry,
 	DependencyStatus,
 	PluginArgEntry,
 	TriedPath,
@@ -20,10 +21,12 @@ import {
 	toVaultRelative,
 } from './src/utils/paths';
 import { isConvertible } from './src/utils/fileTypes';
+import { addHistoryEntry } from './src/utils/history';
 import { SettingsTab } from './src/settings/SettingsTab';
 import { FileConvertModal } from './src/modals/FileConvertModal';
 import { FolderConvertModal } from './src/modals/FolderConvertModal';
 import { UrlConvertModal } from './src/modals/UrlConvertModal';
+import { HistoryModal } from './src/modals/HistoryModal';
 import { SetupModal } from './src/modals/SetupModal';
 import { PreviewModal } from './src/modals/PreviewModal';
 
@@ -77,6 +80,12 @@ export default class MarkitdownPlugin extends Plugin {
 			id: 'convert-url',
 			name: 'Convert URL to Markdown',
 			callback: () => this.openUrlModal(),
+		});
+
+		this.addCommand({
+			id: 'view-conversion-history',
+			name: 'View conversion history',
+			callback: () => new HistoryModal(this.app, this).open(),
 		});
 
 		// Context menu
@@ -243,7 +252,20 @@ export default class MarkitdownPlugin extends Plugin {
 		const options = this.buildConversionOptions(outputPath, inputPath);
 
 		new Notice('Converting file...');
+		const startTime = Date.now();
 		const result = await this.converter.convert(inputPath, outputPath, options);
+		const elapsed = Date.now() - startTime;
+
+		addHistoryEntry(this.settings, {
+			inputFile: inputPath,
+			outputFile: outputPath,
+			timestamp: new Date().toISOString(),
+			success: result.success,
+			error: result.error,
+			processingTimeMs: elapsed,
+			imagesExtracted: result.imagesExtracted,
+		});
+		await this.saveSettings();
 
 		if (result.success) {
 			let content: string;
@@ -284,7 +306,22 @@ export default class MarkitdownPlugin extends Plugin {
 		outputPath: string
 	): Promise<ConversionResult> {
 		const options = this.buildConversionOptions(outputPath, inputPath);
-		return this.converter.convert(inputPath, outputPath, options);
+		const startTime = Date.now();
+		const result = await this.converter.convert(inputPath, outputPath, options);
+		const elapsed = Date.now() - startTime;
+
+		addHistoryEntry(this.settings, {
+			inputFile: inputPath,
+			outputFile: outputPath,
+			timestamp: new Date().toISOString(),
+			success: result.success,
+			error: result.error,
+			processingTimeMs: elapsed,
+			imagesExtracted: result.imagesExtracted,
+		});
+		await this.saveSettings();
+
+		return result;
 	}
 
 	/** Build ConversionOptions from current settings. */
