@@ -28,15 +28,27 @@ export class PreviewModal extends Modal {
 	}
 
 	onOpen() {
-		const { contentEl } = this;
+		const { contentEl, modalEl } = this;
 		contentEl.addClass('markitdown-modal');
 		contentEl.addClass('markitdown-preview-modal');
+
+		// Force the Obsidian modal container to constrain its height
+		modalEl.style.maxHeight = '80vh';
+		modalEl.style.display = 'flex';
+		modalEl.style.flexDirection = 'column';
+		contentEl.style.display = 'flex';
+		contentEl.style.flexDirection = 'column';
+		contentEl.style.overflow = 'hidden';
+		contentEl.style.flex = '1';
+		contentEl.style.minHeight = '0';
+
 		contentEl.createEl('h2', { text: 'Conversion preview' });
 
 		// Metadata section
 		const metaEl = contentEl.createDiv('markitdown-preview-meta');
+		const outputBasename = this.outputPath.split('/').pop() || this.outputPath;
 		metaEl.createEl('div', {
-			text: `Output: ${this.outputPath}`,
+			text: `Output: ${outputBasename}`,
 			cls: 'markitdown-preview-meta-item',
 		});
 		metaEl.createEl('div', {
@@ -62,18 +74,12 @@ export class PreviewModal extends Modal {
 			});
 		}
 
-		// Scrollable preview area
+		// Scrollable preview area — takes remaining space
 		const previewContainer = contentEl.createDiv('markitdown-preview-content');
 		previewContainer.createEl('pre', { text: displayContent });
 
-		// Buttons
+		// Buttons — pinned at bottom
 		const buttonContainer = contentEl.createDiv('markitdown-button-container');
-
-		const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
-		cancelBtn.addEventListener('click', async () => {
-			await this.onCancel();
-			this.close();
-		});
 
 		const saveBtn = buttonContainer.createEl('button', {
 			text: 'Save',
@@ -88,6 +94,12 @@ export class PreviewModal extends Modal {
 			} finally {
 				this.close();
 			}
+		});
+
+		const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
+		cancelBtn.addEventListener('click', async () => {
+			await this.onCancel();
+			this.close();
 		});
 	}
 
