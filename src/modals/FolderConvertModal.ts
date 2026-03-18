@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type MarkitdownPlugin from '../../main';
 import { EXTENSION_GROUPS } from '../utils/fileTypes';
-import { getVaultBasePath, resolveOutputFolder } from '../utils/paths';
+import { getVaultBasePath, resolveOutputFolder, resolveFilenameTemplate } from '../utils/paths';
 import { BatchProgressModal } from './BatchProgressModal';
 
 /**
@@ -176,7 +176,10 @@ export class FolderConvertModal extends Modal {
 			progressModal?.updateProgress(i, entry.name, success, failed);
 
 			// Determine the output path, preserving subfolder structure
-			const baseName = path.basename(entry.name, path.extname(entry.name));
+			const resolvedName = resolveFilenameTemplate(
+				this.plugin.settings.outputFilenameTemplate || '{filename}',
+				entry.name
+			);
 			const relativeDir = path.dirname(entry.relativePath);
 			const entryOutputFolder = relativeDir && relativeDir !== '.'
 				? path.join(outputFolder, relativeDir)
@@ -185,7 +188,7 @@ export class FolderConvertModal extends Modal {
 			// Ensure the output subdirectory exists
 			await fs.promises.mkdir(entryOutputFolder, { recursive: true });
 
-			const outputPath = path.join(entryOutputFolder, `${baseName}.md`);
+			const outputPath = path.join(entryOutputFolder, `${resolvedName}.md`);
 			const safeName = entry.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 			const tempFilePath = path.join(entryOutputFolder, `tmp_${Date.now()}_${i}_${safeName}`);
 

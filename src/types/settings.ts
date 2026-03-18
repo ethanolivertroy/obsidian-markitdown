@@ -14,6 +14,7 @@ export interface MarkitdownSettings {
 	enableBatchProgress: boolean;
 	enableContextMenu: boolean;
 	enableRecursiveConversion: boolean;
+	outputFilenameTemplate: string;
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	enableBatchProgress: true,
 	enableContextMenu: true,
 	enableRecursiveConversion: false,
+	outputFilenameTemplate: '{filename}',
 };
 
 export interface ConversionOptions {

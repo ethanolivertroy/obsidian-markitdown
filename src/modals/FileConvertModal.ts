@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type MarkitdownPlugin from '../../main';
 import { FILE_INPUT_ACCEPT } from '../utils/fileTypes';
-import { getVaultBasePath, resolveOutputFolder, toVaultRelative } from '../utils/paths';
+import { getVaultBasePath, resolveOutputFolder, resolveFilenameTemplate, toVaultRelative } from '../utils/paths';
 
 export class FileConvertModal extends Modal {
 	private plugin: MarkitdownPlugin;
@@ -51,8 +51,11 @@ export class FileConvertModal extends Modal {
 				}
 
 				const outputFolder = resolveOutputFolder(vaultPath, this.plugin.settings.outputPath);
-				const baseName = path.basename(file.name, path.extname(file.name));
-				const outputPath = path.join(outputFolder, `${baseName}.md`);
+				const resolvedName = resolveFilenameTemplate(
+					this.plugin.settings.outputFilenameTemplate || '{filename}',
+					file.name
+				);
+				const outputPath = path.join(outputFolder, `${resolvedName}.md`);
 
 				// Write the DOM File to a temp file on disk
 				const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');

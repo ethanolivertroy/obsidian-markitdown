@@ -85,6 +85,21 @@ export class SettingsTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('Output filename template')
+			.setDesc(
+				'Template for converted filenames. Variables: {filename} (original name), ' +
+				'{ext} (original extension), {date} (YYYY-MM-DD), {datetime} (YYYY-MM-DD_HHmmss). ' +
+				'The .md extension is always appended automatically.'
+			)
+			.addText(text => text
+				.setPlaceholder('{filename}')
+				.setValue(this.plugin.settings.outputFilenameTemplate)
+				.onChange(async (value) => {
+					this.plugin.settings.outputFilenameTemplate = value || '{filename}';
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Extract images')
 			.setDesc('Extract embedded images from PDFs and save as separate files')
 			.addToggle(toggle => toggle
