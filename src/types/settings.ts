@@ -13,6 +13,7 @@ export interface MarkitdownSettings {
 	imageSubfolderTemplate: string;
 	enableBatchProgress: boolean;
 	enableContextMenu: boolean;
+	enableDragDrop: boolean;
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	imageSubfolderTemplate: '{filename}-images',
 	enableBatchProgress: true,
 	enableContextMenu: true,
+	enableDragDrop: true,
 };
 
 export interface ConversionOptions {

@@ -120,6 +120,16 @@ export class SettingsTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		new Setting(containerEl)
+			.setName('Drag and drop')
+			.setDesc('Convert supported files automatically when dropped into the editor')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableDragDrop)
+				.onChange(async (value) => {
+					this.plugin.settings.enableDragDrop = value;
+					await this.plugin.saveSettings();
+				}));
+
 		// ── Advanced ─────────────────────────────
 		new Setting(containerEl)
 			.setName('Advanced')
