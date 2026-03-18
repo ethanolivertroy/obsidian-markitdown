@@ -176,6 +176,7 @@ Styles for the Markitdown Obsidian plugin
   font-weight: 500;
 }
 
+<<<<<<< HEAD
 /* Resolved path hint */
 .markitdown-resolved-path-hint {
   font-size: 0.85em;
@@ -283,6 +284,51 @@ Styles for the Markitdown Obsidian plugin
 .markitdown-troubleshooting-hint {
   font-style: italic;
   color: var(--text-faint);
+}
+
+/* Preview modal */
+.markitdown-preview-modal {
+  width: 80vw;
+  max-width: 900px;
+}
+
+.markitdown-preview-meta {
+  background-color: var(--background-secondary);
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.markitdown-preview-meta-item {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.markitdown-preview-truncation-note {
+  font-size: 0.85em;
+  color: var(--text-accent);
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.markitdown-preview-content {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background-color: var(--background-primary-alt);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.markitdown-preview-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  color: var(--text-normal);
 }
 
 /* Plugin args editor */

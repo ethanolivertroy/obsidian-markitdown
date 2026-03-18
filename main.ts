@@ -25,6 +25,7 @@ import { FileConvertModal } from './src/modals/FileConvertModal';
 import { FolderConvertModal } from './src/modals/FolderConvertModal';
 import { UrlConvertModal } from './src/modals/UrlConvertModal';
 import { SetupModal } from './src/modals/SetupModal';
+import { PreviewModal } from './src/modals/PreviewModal';
 
 export default class MarkitdownPlugin extends Plugin {
 	settings: MarkitdownSettings = DEFAULT_SETTINGS;
@@ -245,11 +246,30 @@ export default class MarkitdownPlugin extends Plugin {
 		const result = await this.converter.convert(inputPath, outputPath, options);
 
 		if (result.success) {
-			const msg = result.imagesExtracted
-				? `Converted successfully (${result.imagesExtracted} images extracted)`
-				: 'Converted successfully';
-			new Notice(msg);
-			await this.openConvertedFile(outputPath, vaultPath);
+			let content: string;
+			try {
+				content = await fs.promises.readFile(outputPath, 'utf-8');
+			} catch {
+				new Notice('Conversion succeeded but could not read output file');
+				return;
+			}
+
+			new PreviewModal(this.app, {
+				content,
+				outputPath,
+				processingTime: result.processingTime ?? 0,
+				onSave: async () => {
+					const msg = result.imagesExtracted
+						? `Converted successfully (${result.imagesExtracted} images extracted)`
+						: 'Converted successfully';
+					new Notice(msg);
+					await this.openConvertedFile(outputPath, vaultPath);
+				},
+				onCancel: async () => {
+					await fs.promises.unlink(outputPath).catch(() => {});
+					new Notice('Conversion discarded');
+				},
+			}).open();
 		} else {
 			new Notice(`Conversion failed: ${result.error}`);
 		}
