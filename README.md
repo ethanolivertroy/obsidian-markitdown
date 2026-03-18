@@ -28,6 +28,16 @@ Integrate Microsoft's [Markitdown](https://github.com/microsoft/markitdown) tool
 2. Enable the plugin in Obsidian's settings
 3. The plugin will guide you through installing the Markitdown Python package
 
+## Beta Testing
+
+You can get early access to new features by installing beta releases via [BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tester):
+
+1. Install the BRAT plugin from the Obsidian Community Plugins browser
+2. Enable BRAT in your Obsidian settings
+3. In BRAT settings, click **Add Beta Plugin**
+4. Enter: `ethanolivertroy/obsidian-markitdown`
+5. BRAT will install the latest beta release and keep it updated automatically
+
 ## Requirements
 
 - Obsidian v0.15.0 or higher
