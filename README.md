@@ -17,8 +17,15 @@ Integrate Microsoft's [Markitdown](https://github.com/microsoft/markitdown) tool
   - Youtube URLs
   - And more!
 
-- Convert individual files or entire folders at once
+- Convert individual files or entire folders (with recursive subfolder support)
+- **Drag-and-drop** — drop files into the editor to auto-convert
+- **URL/YouTube conversion** — convert web pages and YouTube transcripts to Markdown
+- **Conversion preview** — preview output before saving
+- **Post-conversion hooks** — auto-add YAML frontmatter and tags
+- **Custom filename templates** — use `{filename}`, `{date}`, `{ext}`, `{datetime}` variables
+- **Conversion history** — browse past conversions with success/fail tracking
 - Easy installation of the Markitdown Python package directly from the plugin
+- Smart Python detection across macOS, Windows, and Linux (Homebrew, Framework, AppData paths)
 - Optional use of Azure Document Intelligence for improved conversion quality
 - Support for third-party Markitdown plugins
 
@@ -55,20 +62,41 @@ You can get early access to new features by installing beta releases via [BRAT](
 
 ### Converting multiple files in a folder
 
-1. Use the command palette to run "Convert folder contents to Markdown with Markitdown"
+1. Use the command palette to run "Convert folder to Markdown"
 2. Select the folder containing the files you want to convert
-3. Check the file types you want to include in the conversion
-4. Click the "Convert" button
-5. The converted Markdown files will be saved in your specified output folder
+3. Toggle "Include subfolders" for recursive conversion
+4. Check the file types you want to include
+5. Click "Convert" — folder structure is preserved in the output
+
+### Converting a URL or YouTube video
+
+1. Use the command palette to run "Convert URL to Markdown"
+2. Paste any URL (YouTube, web pages, etc.)
+3. Click "Convert" — the transcript or page content is saved as Markdown
+
+### Drag-and-drop
+
+Simply drag a supported file from Finder/Explorer directly into an open note. The plugin will convert it and insert a link at the drop position.
+
+### Viewing conversion history
+
+Use the command palette to run "View conversion history" to see all past conversions with timestamps, success/fail status, and processing times.
 
 ## Configuration
 
 The plugin settings can be found in the Obsidian settings panel under "Markitdown":
 
-- **Python Path**: Specify the path to your Python executable (default: "python")
-- **Enable Markitdown Plugins**: Toggle to enable third-party Markitdown plugins
-- **Azure Document Intelligence Endpoint**: Optionally add an Azure Document Intelligence endpoint for improved conversion quality
-- **Output Folder**: Specify where the converted Markdown files should be saved (relative to vault root, default: "markitdown-output")
+- **Python Path**: Path to your Python executable — the plugin auto-detects common locations if left as "python"
+- **Output Folder**: Where converted files are saved (relative to vault root, default: "markitdown-output")
+- **Output Filename Template**: Customize output names with `{filename}`, `{ext}`, `{date}`, `{datetime}`
+- **Extract Images**: Extract embedded images from PDFs to separate files
+- **Recursive Folder Conversion**: Include subfolders when converting folders
+- **Drag and Drop**: Auto-convert supported files dropped into the editor
+- **Context Menu**: Right-click "Convert to Markdown" in the file explorer
+- **Auto Frontmatter**: Automatically add YAML frontmatter with source file, date, and converter
+- **Auto Tags**: Comma-separated tags added to converted files' frontmatter
+- **Enable Markitdown Plugins**: Toggle third-party Markitdown plugins with key-value argument editor
+- **Azure Document Intelligence Endpoint**: Optional Azure endpoint for enhanced PDF conversion
 
 ## How it works
 
@@ -81,9 +109,10 @@ This plugin acts as a bridge between Obsidian and Microsoft's Markitdown Python 
 
 ## Troubleshooting
 
-- **Python not found**: Make sure Python is installed on your system and the path is correctly set in the plugin settings
-- **Conversion errors**: Check the console for error messages by pressing Ctrl+Shift+I (or Cmd+Opt+I on Mac)
-- **Missing dependencies**: Some file formats may require additional Python dependencies. The plugin will try to install these automatically, but you may need to install them manually
+- **Python not found**: The plugin searches common paths automatically. If it still can't find Python, set the full path in settings (e.g., `C:\Users\You\AppData\Local\Programs\Python\Python313\python.exe` on Windows or `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3` on macOS). Check the Troubleshooting section in settings for details on which paths were tried.
+- **Markitdown not installed**: Run `pip install markitdown[all]` in your terminal using the same Python shown in settings. Or click the "Install Markitdown" button in the settings panel.
+- **Conversion errors**: Check the console (Ctrl+Shift+I / Cmd+Opt+I) or the conversion history (command palette → "View conversion history")
+- **Missing dependencies**: Some file formats may require additional Python packages. The plugin will try to install these automatically.
 
 ## Development
 

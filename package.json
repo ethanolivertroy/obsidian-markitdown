@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-markitdown",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"description": "Convert various file formats to Markdown using Microsoft's Markitdown library",
 	"main": "main.js",
 	"scripts": {

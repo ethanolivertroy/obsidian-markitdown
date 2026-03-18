@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.1.0
+
+Feature release with 11 new capabilities and a critical Python detection fix.
+
+### Fixed
+
+- **Python detection on macOS/Windows** (#13) — GUI apps (Obsidian/Electron) don't inherit shell PATH, so the plugin now searches well-known Python paths: Homebrew, Python.org Framework installs, Windows AppData, and Microsoft Store locations
+- **Settings field focus loss** — Python path input no longer triggers dependency checks on every keystroke (debounced to 1.5s)
+- **Empty path crash** — clearing the Python path field no longer crashes `spawn()` with an empty string
+- **Stale metadata detection** — `check_install.py` now verifies `from markitdown import MarkItDown` actually works, not just that package metadata exists
+
+### Added
+
+- **Drag-and-drop conversion** — drop supported files directly into the editor to auto-convert and insert a wiki-link
+- **URL/YouTube conversion** — new "Convert URL to Markdown" command for YouTube transcripts and web pages
+- **Conversion preview** — preview converted markdown in a modal before saving (Save/Cancel)
+- **Post-conversion hooks** — auto-add YAML frontmatter (source, date, converter) and custom tags
+- **Custom filename template** — configure output names with `{filename}`, `{ext}`, `{date}`, `{datetime}` variables
+- **Recursive folder conversion** — "Include subfolders" toggle preserves directory structure in output
+- **Conversion history** — "View conversion history" command shows past conversions with success/fail badges
+- **Resolved path hint** — settings now show which Python path is actually being used
+- **Troubleshooting UI** — when Python/markitdown isn't found, shows tried paths, download links, and pip install commands with a copy button
+- **Unit tests** — 30 Jest tests covering Python discovery, path utilities, and edge cases
+- **BRAT beta channel** — GitHub Actions release workflow with `manifest-beta.json` for early access
+
+### Changed
+
+- Python discovery prefers the first Python where markitdown actually imports over one where it's absent
+- Settings UI reorganized with new "Post-conversion" section
+- `check_install.py` validates against an allowlist of package names
+
 ## 2.0.0
 
 Ground-up rewrite addressing security, architecture, and feature gaps.
