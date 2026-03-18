@@ -20,6 +20,7 @@ import { isConvertible } from './src/utils/fileTypes';
 import { SettingsTab } from './src/settings/SettingsTab';
 import { FileConvertModal } from './src/modals/FileConvertModal';
 import { FolderConvertModal } from './src/modals/FolderConvertModal';
+import { UrlConvertModal } from './src/modals/UrlConvertModal';
 import { SetupModal } from './src/modals/SetupModal';
 
 export default class MarkitdownPlugin extends Plugin {
@@ -61,6 +62,12 @@ export default class MarkitdownPlugin extends Plugin {
 			callback: () => this.openFolderModal(),
 		});
 
+		this.addCommand({
+			id: 'convert-url',
+			name: 'Convert URL to Markdown',
+			callback: () => this.openUrlModal(),
+		});
+
 		// Context menu
 		if (this.settings.enableContextMenu) {
 			this.registerFileMenu();
@@ -90,6 +97,15 @@ export default class MarkitdownPlugin extends Plugin {
 			return;
 		}
 		new FolderConvertModal(this.app, this).open();
+	}
+
+	/** Open URL conversion modal, or setup modal if not installed. */
+	private openUrlModal() {
+		if (!this.dependencyStatus.markitdownInstalled) {
+			new SetupModal(this.app, this).open();
+			return;
+		}
+		new UrlConvertModal(this.app, this).open();
 	}
 
 	/** Register right-click context menu on supported file types. */
