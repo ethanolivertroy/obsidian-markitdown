@@ -101,6 +101,16 @@ export class SettingsTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
+			.setName('Recursive folder conversion')
+			.setDesc('Include subfolders by default when converting a folder')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableRecursiveConversion)
+				.onChange(async (value) => {
+					this.plugin.settings.enableRecursiveConversion = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Show batch progress')
 			.setDesc('Display a progress bar during batch folder conversions')
 			.addToggle(toggle => toggle
