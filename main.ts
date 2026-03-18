@@ -29,7 +29,6 @@ import { FolderConvertModal } from './src/modals/FolderConvertModal';
 import { UrlConvertModal } from './src/modals/UrlConvertModal';
 import { HistoryModal } from './src/modals/HistoryModal';
 import { SetupModal } from './src/modals/SetupModal';
-import { PreviewModal } from './src/modals/PreviewModal';
 
 export default class MarkitdownPlugin extends Plugin {
 	settings: MarkitdownSettings = DEFAULT_SETTINGS;
@@ -274,30 +273,11 @@ export default class MarkitdownPlugin extends Plugin {
 		await this.saveSettings();
 
 		if (result.success) {
-			let content: string;
-			try {
-				content = await fs.promises.readFile(outputPath, 'utf-8');
-			} catch {
-				new Notice('Conversion succeeded but could not read output file');
-				return;
-			}
-
-			new PreviewModal(this.app, {
-				content,
-				outputPath,
-				processingTime: result.processingTime ?? 0,
-				onSave: async () => {
-					const msg = result.imagesExtracted
-						? `Converted successfully (${result.imagesExtracted} images extracted)`
-						: 'Converted successfully';
-					new Notice(msg);
-					await this.openConvertedFile(outputPath, vaultPath);
-				},
-				onCancel: async () => {
-					await fs.promises.unlink(outputPath).catch(() => {});
-					new Notice('Conversion discarded');
-				},
-			}).open();
+			const msg = result.imagesExtracted
+				? `Converted successfully (${result.imagesExtracted} images extracted)`
+				: 'Converted successfully';
+			new Notice(msg);
+			await this.openConvertedFile(outputPath, vaultPath);
 		} else {
 			new Notice(`Conversion failed: ${result.error}`);
 		}
