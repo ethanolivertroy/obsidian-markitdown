@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type MarkitdownPlugin from '../../main';
 import { EXTENSION_GROUPS } from '../utils/fileTypes';
-import { getVaultBasePath, resolveOutputFolder } from '../utils/paths';
+import { getVaultBasePath, resolveOutputFolder, resolveFilenameTemplate } from '../utils/paths';
 import { BatchProgressModal } from './BatchProgressModal';
 
 export class FolderConvertModal extends Modal {
@@ -119,8 +119,11 @@ export class FolderConvertModal extends Modal {
 			const file = files[i];
 			progressModal?.updateProgress(i, file.name, success, failed);
 
-			const baseName = path.basename(file.name, path.extname(file.name));
-			const outputPath = path.join(outputFolder, `${baseName}.md`);
+			const resolvedName = resolveFilenameTemplate(
+				this.plugin.settings.outputFilenameTemplate || '{filename}',
+				file.name
+			);
+			const outputPath = path.join(outputFolder, `${resolvedName}.md`);
 			const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
 			const tempFilePath = path.join(outputFolder, `tmp_${Date.now()}_${i}_${safeName}`);
 

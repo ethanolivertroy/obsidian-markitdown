@@ -13,6 +13,7 @@ import { checkDependencies, installPackage } from './src/utils/python';
 import {
 	getVaultBasePath,
 	resolveOutputFolder,
+	resolveFilenameTemplate,
 	resolveImageDir,
 	toVaultRelative,
 } from './src/utils/paths';
@@ -123,8 +124,11 @@ export default class MarkitdownPlugin extends Plugin {
 
 		const inputPath = path.join(vaultPath, file.path);
 		const outputFolder = resolveOutputFolder(vaultPath, this.settings.outputPath);
-		const baseName = file.basename;
-		const outputPath = path.join(outputFolder, `${baseName}.md`);
+		const resolvedName = resolveFilenameTemplate(
+			this.settings.outputFilenameTemplate || '{filename}',
+			inputPath
+		);
+		const outputPath = path.join(outputFolder, `${resolvedName}.md`);
 		const options = this.buildConversionOptions(outputPath);
 
 		new Notice('Converting file...');
