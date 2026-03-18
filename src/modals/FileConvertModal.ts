@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import type MarkitdownPlugin from '../../main';
 import { FILE_INPUT_ACCEPT } from '../utils/fileTypes';
 import { getVaultBasePath, resolveOutputFolder, toVaultRelative } from '../utils/paths';
+import { PreviewModal } from './PreviewModal';
 
 export class FileConvertModal extends Modal {
 	private plugin: MarkitdownPlugin;
@@ -64,12 +65,36 @@ export class FileConvertModal extends Modal {
 					const result = await this.plugin.convertExternalFile(tempFilePath, outputPath);
 
 					if (result.success) {
-						const msg = result.imagesExtracted
-							? `Converted successfully (${result.imagesExtracted} images extracted)`
-							: 'Converted successfully';
-						new Notice(msg);
+						// Read the converted output for preview
+						let content: string;
+						try {
+							content = await fs.promises.readFile(outputPath, 'utf-8');
+						} catch {
+							new Notice('Conversion succeeded but could not read output file');
+							convertButton.disabled = false;
+							convertButton.setText('Convert');
+							return;
+						}
+
 						this.close();
-						await this.plugin.openConvertedFile(outputPath, vaultPath);
+
+						new PreviewModal(this.app, {
+							content,
+							outputPath,
+							processingTime: result.processingTime ?? 0,
+							onSave: async () => {
+								const msg = result.imagesExtracted
+									? `Converted successfully (${result.imagesExtracted} images extracted)`
+									: 'Converted successfully';
+								new Notice(msg);
+								await this.plugin.openConvertedFile(outputPath, vaultPath);
+							},
+							onCancel: async () => {
+								// Discard the converted output file
+								await fs.promises.unlink(outputPath).catch(() => {});
+								new Notice('Conversion discarded');
+							},
+						}).open();
 					} else {
 						new Notice(`Conversion failed: ${result.error}`);
 						convertButton.disabled = false;
