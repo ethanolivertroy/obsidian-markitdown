@@ -163,6 +163,32 @@ export class SettingsTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		// ── Post-conversion ─────────────────────
+		new Setting(containerEl)
+			.setName('Post-conversion')
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName('Auto frontmatter')
+			.setDesc('Automatically add YAML frontmatter with source filename, conversion date, and converter name')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableAutoFrontmatter)
+				.onChange(async (value) => {
+					this.plugin.settings.enableAutoFrontmatter = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Auto tags')
+			.setDesc('Comma-separated tags to add to frontmatter (e.g., "converted, imported, pdf"). Requires auto frontmatter or adds a frontmatter block for tags alone.')
+			.addText(text => text
+				.setPlaceholder('converted, imported')
+				.setValue(this.plugin.settings.autoTags)
+				.onChange(async (value) => {
+					this.plugin.settings.autoTags = value;
+					await this.plugin.saveSettings();
+				}));
+
 		// ── Advanced ─────────────────────────────
 		new Setting(containerEl)
 			.setName('Advanced')

@@ -1,8 +1,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ConversionOptions, ConversionResult } from '../types/settings';
+import { ConversionOptions, ConversionResult, MarkitdownSettings } from '../types/settings';
 import { runPythonScript, getPythonScriptPath } from '../utils/python';
 import { SUPPORTED_EXTENSIONS } from '../utils/fileTypes';
+import { applyPostConversionHooks } from '../utils/postprocess';
 
 export class MarkitdownConverter {
 	constructor(
@@ -143,6 +144,24 @@ export class MarkitdownConverter {
 					error: 'Output file was not created',
 					processingTime: Date.now() - startTime,
 				};
+			}
+
+			// Apply post-conversion hooks (frontmatter, tags)
+			if (options?.postProcess) {
+				try {
+					const raw = fs.readFileSync(outputPath, 'utf-8');
+					const processed = applyPostConversionHooks(
+						raw,
+						options.postProcess.inputPath,
+						options.postProcess.settings
+					);
+					if (processed !== raw) {
+						fs.writeFileSync(outputPath, processed, 'utf-8');
+					}
+				} catch (hookError: unknown) {
+					// Log but don't fail the conversion for a post-processing error
+					console.warn('markitdown: post-conversion hook error:', hookError);
+				}
 			}
 
 			// Parse success response

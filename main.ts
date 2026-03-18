@@ -240,7 +240,7 @@ export default class MarkitdownPlugin extends Plugin {
 			inputPath
 		);
 		const outputPath = path.join(outputFolder, `${resolvedName}.md`);
-		const options = this.buildConversionOptions(outputPath);
+		const options = this.buildConversionOptions(outputPath, inputPath);
 
 		new Notice('Converting file...');
 		const result = await this.converter.convert(inputPath, outputPath, options);
@@ -283,12 +283,12 @@ export default class MarkitdownPlugin extends Plugin {
 		inputPath: string,
 		outputPath: string
 	): Promise<ConversionResult> {
-		const options = this.buildConversionOptions(outputPath);
+		const options = this.buildConversionOptions(outputPath, inputPath);
 		return this.converter.convert(inputPath, outputPath, options);
 	}
 
 	/** Build ConversionOptions from current settings. */
-	buildConversionOptions(outputPath: string): ConversionOptions {
+	buildConversionOptions(outputPath: string, inputPath?: string): ConversionOptions {
 		const options: ConversionOptions = {
 			enablePlugins: this.settings.enablePlugins,
 			docintelEndpoint: this.settings.docintelEndpoint || undefined,
@@ -304,6 +304,14 @@ export default class MarkitdownPlugin extends Plugin {
 				outputPath,
 				this.settings.imageSubfolderTemplate
 			);
+		}
+
+		// Attach post-processing settings when hooks are enabled
+		if (inputPath && (this.settings.enableAutoFrontmatter || this.settings.autoTags.trim())) {
+			options.postProcess = {
+				settings: this.settings,
+				inputPath,
+			};
 		}
 
 		return options;

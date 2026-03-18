@@ -16,6 +16,8 @@ export interface MarkitdownSettings {
 	enableRecursiveConversion: boolean;
 	outputFilenameTemplate: string;
 	enableDragDrop: boolean;
+	enableAutoFrontmatter: boolean;
+	autoTags: string;
 }
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
@@ -31,6 +33,8 @@ export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	enableRecursiveConversion: false,
 	outputFilenameTemplate: '{filename}',
 	enableDragDrop: true,
+	enableAutoFrontmatter: false,
+	autoTags: '',
 };
 
 export interface ConversionOptions {
@@ -39,6 +43,10 @@ export interface ConversionOptions {
 	docintelEndpoint?: string;
 	extractImages?: boolean;
 	imageDir?: string;
+	postProcess?: {
+		settings: MarkitdownSettings;
+		inputPath: string;
+	};
 }
 
 export interface ConversionResult {
