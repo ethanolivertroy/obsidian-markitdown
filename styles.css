@@ -66,6 +66,16 @@ Styles for the Markitdown Obsidian plugin
   color: var(--text-error);
 }
 
+/* Resolved Python path hint */
+.markitdown-resolved-path-hint {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: -8px;
+  margin-bottom: 12px;
+  padding-left: 2px;
+  font-family: var(--font-monospace);
+}
+
 /* File type checkbox grid */
 .markitdown-checkbox-grid {
   display: grid;

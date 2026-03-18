@@ -31,7 +31,12 @@ export default class MarkitdownPlugin extends Plugin {
 		markitdownVersion: null,
 	};
 	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
-	private resolvedPythonPath = 'python';
+	private _resolvedPythonPath = 'python';
+
+	/** The Python path actually used after discovery/fallback resolution. */
+	get resolvedPythonPath(): string {
+		return this._resolvedPythonPath;
+	}
 
 	async onload() {
 		await this.loadSettings();
@@ -40,7 +45,7 @@ export default class MarkitdownPlugin extends Plugin {
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
 		// Use the resolved python path (handles python→python3 fallback)
-		this.resolvedPythonPath = depCheck.resolvedPythonPath;
+		this._resolvedPythonPath = depCheck.resolvedPythonPath;
 		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 
 		// Ribbon icon
@@ -232,7 +237,7 @@ export default class MarkitdownPlugin extends Plugin {
 		const pluginDir = this.getPluginDir();
 		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
 		this.dependencyStatus = depCheck.status;
-		this.resolvedPythonPath = depCheck.resolvedPythonPath;
+		this._resolvedPythonPath = depCheck.resolvedPythonPath;
 		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 	}
 

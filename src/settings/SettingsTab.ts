@@ -60,6 +60,14 @@ export class SettingsTab extends PluginSettingTab {
 					}, 1500);
 				}));
 
+		// Show the resolved Python path when it differs from the configured path
+		const configuredPath = this.plugin.settings.pythonPath || 'python';
+		const resolvedPath = this.plugin.resolvedPythonPath;
+		if (resolvedPath && resolvedPath !== configuredPath) {
+			const hint = containerEl.createDiv('markitdown-resolved-path-hint');
+			hint.setText(`Resolved: ${resolvedPath}`);
+		}
+
 		// ── Conversion ──────────────────────────
 		new Setting(containerEl)
 			.setName('Conversion')
