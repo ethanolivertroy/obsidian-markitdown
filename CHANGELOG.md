@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Markitdown not detected on macOS** (#16) — discovery now probes versioned Homebrew Pythons (e.g. `python3.11`), pipx venvs (`~/.local/pipx/venvs/markitdown`), and always falls back even when an absolute Python path is configured
+- **Install button fails under PEP 668** (#16) — "Install Markitdown" creates a plugin-local `.venv` instead of `pip install` into Homebrew's externally-managed Python
+- Obsidian GUI PATH gaps — spawn env prepends `/opt/homebrew/bin`, `/usr/local/bin`, and `~/.local/bin`
+- Bundled Python scripts are refreshed when their contents change (community plugin updates no longer keep stale `install_package.py`)
+
 ## 2.1.0
 
 Feature release with 11 new capabilities and a critical Python detection fix.

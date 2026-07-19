@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import * as path from 'path';
 import type { ChildProcess } from 'child_process';
 
 // ---- mock child_process.spawn before importing the module under test ----
@@ -7,8 +8,14 @@ jest.mock('child_process', () => ({
 	spawn: spawnMock,
 }));
 
-import { checkDependencies, runPythonScript, getPythonScriptPath } from '../python';
-import type { DependencyStatus } from '../../types/settings';
+import {
+	buildPythonCandidates,
+	buildSpawnEnv,
+	checkDependencies,
+	getPluginVenvPython,
+	getPythonScriptPath,
+	runPythonScript,
+} from '../python';
 
 // Helper: create a fake ChildProcess that emits events
 function fakeChild(
@@ -71,6 +78,85 @@ describe('getPythonScriptPath', () => {
 	});
 });
 
+// ---------- buildSpawnEnv ----------
+describe('buildSpawnEnv', () => {
+	it('prepends common user/brew bin dirs to PATH', () => {
+		const env = buildSpawnEnv();
+		expect(env.PYTHONUTF8).toBe('1');
+		expect(env.PATH).toBeTruthy();
+		if (process.platform !== 'win32') {
+			expect(env.PATH).toContain('/opt/homebrew/bin');
+		}
+	});
+});
+
+// ---------- buildPythonCandidates ----------
+describe('buildPythonCandidates', () => {
+	const pluginDir = '/plugins/markitdown';
+	const originalPlatform = process.platform;
+	const originalHome = process.env.HOME;
+
+	afterEach(() => {
+		Object.defineProperty(process, 'platform', { value: originalPlatform });
+		if (originalHome === undefined) {
+			delete process.env.HOME;
+		} else {
+			process.env.HOME = originalHome;
+		}
+		delete process.env.PIPX_HOME;
+	});
+
+	it('includes plugin venv and pipx python on darwin', () => {
+		Object.defineProperty(process, 'platform', { value: 'darwin' });
+		process.env.HOME = '/Users/test';
+
+		const paths = buildPythonCandidates('python', pluginDir);
+
+		expect(paths[0]).toBe('python');
+		expect(paths).toContain(getPluginVenvPython(pluginDir));
+		expect(paths).toContain('/Users/test/.local/pipx/venvs/markitdown/bin/python');
+		expect(paths).toContain('/opt/homebrew/bin/python3');
+		expect(paths).toContain('/opt/homebrew/bin/python3.11');
+		expect(paths).toContain('/opt/homebrew/opt/python@3.11/bin/python3');
+		expect(paths).toContain('/usr/local/bin/python3.12');
+	});
+
+	it('still adds fallbacks when configured path is absolute', () => {
+		Object.defineProperty(process, 'platform', { value: 'darwin' });
+		process.env.HOME = '/Users/test';
+
+		const paths = buildPythonCandidates('/opt/homebrew/bin/python3', pluginDir);
+
+		expect(paths[0]).toBe('/opt/homebrew/bin/python3');
+		expect(paths).toContain('/opt/homebrew/bin/python3.11');
+		expect(paths).toContain('/Users/test/.local/pipx/venvs/markitdown/bin/python');
+	});
+
+	it('respects PIPX_HOME override', () => {
+		Object.defineProperty(process, 'platform', { value: 'darwin' });
+		process.env.HOME = '/Users/test';
+		process.env.PIPX_HOME = '/custom/pipx';
+
+		const paths = buildPythonCandidates('python3', pluginDir);
+		expect(paths).toContain('/custom/pipx/venvs/markitdown/bin/python');
+	});
+
+	it('includes Windows pipx and LocalAppData paths', () => {
+		Object.defineProperty(process, 'platform', { value: 'win32' });
+		process.env.HOME = 'C:\\Users\\test';
+		process.env.USERPROFILE = 'C:\\Users\\test';
+		process.env.LOCALAPPDATA = 'C:\\Users\\test\\AppData\\Local';
+
+		const paths = buildPythonCandidates('python', pluginDir);
+
+		expect(paths).toContain(path.join(pluginDir, '.venv', 'Scripts', 'python.exe'));
+		expect(paths).toContain(
+			path.join('C:\\Users\\test', '.local', 'pipx', 'venvs', 'markitdown', 'Scripts', 'python.exe')
+		);
+		expect(paths.some(p => p.includes('Programs\\Python\\Python311'))).toBe(true);
+	});
+});
+
 // ---------- runPythonScript ----------
 describe('runPythonScript', () => {
 	it('resolves with stdout, stderr, and exitCode on success', async () => {
@@ -81,7 +167,10 @@ describe('runPythonScript', () => {
 		expect(spawnMock).toHaveBeenCalledWith(
 			'/usr/bin/python3',
 			['script.py', '--flag'],
-			expect.objectContaining({ shell: false }),
+			expect.objectContaining({
+				shell: false,
+				env: expect.objectContaining({ PYTHONUTF8: '1' }),
+			}),
 		);
 		expect(result).toEqual({
 			stdout: 'hello world',
@@ -154,7 +243,7 @@ describe('checkDependencies', () => {
 
 	it('tries fallback paths when first Python lacks markitdown, prefers one with markitdown', async () => {
 		// First call: python found but no markitdown
-		// Second call: python3 found with markitdown
+		// Second call: next candidate found with markitdown
 		let callCount = 0;
 		spawnMock.mockImplementation(() => {
 			callCount++;
@@ -176,9 +265,68 @@ describe('checkDependencies', () => {
 
 		expect(status.markitdownInstalled).toBe(true);
 		expect(status.markitdownVersion).toBe('0.2.0');
-		// The resolved path should be the second candidate (python3)
-		expect(resolvedPythonPath).toBe('python3');
+		// Second candidate is the plugin venv path
+		expect(resolvedPythonPath).toBe(getPluginVenvPython(pluginDir));
 		expect(spawnMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('finds markitdown on a versioned Homebrew Python after generic python3 lacks it', async () => {
+		Object.defineProperty(process, 'platform', { value: 'darwin' });
+		process.env.HOME = '/Users/test';
+
+		const paths: string[] = [];
+		spawnMock.mockImplementation((...args: unknown[]) => {
+			const tryPath = args[0] as string;
+			paths.push(tryPath);
+			if (tryPath === '/opt/homebrew/bin/python3.11') {
+				return fakeChild(
+					checkOutput({ markitdownInstalled: true, markitdownVersion: '0.1.6' }),
+					'',
+					0,
+				);
+			}
+			return fakeChild(
+				checkOutput({ markitdownInstalled: false }),
+				'',
+				0,
+			);
+		});
+
+		const { status, resolvedPythonPath } = await checkDependencies(
+			'/opt/homebrew/bin/python3',
+			pluginDir,
+		);
+
+		expect(status.markitdownInstalled).toBe(true);
+		expect(resolvedPythonPath).toBe('/opt/homebrew/bin/python3.11');
+		expect(paths).toContain('/opt/homebrew/bin/python3.11');
+	});
+
+	it('finds markitdown in a pipx venv', async () => {
+		Object.defineProperty(process, 'platform', { value: 'darwin' });
+		process.env.HOME = '/Users/test';
+
+		const pipxPython = '/Users/test/.local/pipx/venvs/markitdown/bin/python';
+		spawnMock.mockImplementation((...args: unknown[]) => {
+			const tryPath = args[0] as string;
+			if (tryPath === pipxPython) {
+				return fakeChild(
+					checkOutput({ markitdownInstalled: true, markitdownVersion: '0.1.6' }),
+					'',
+					0,
+				);
+			}
+			return fakeChild(
+				checkOutput({ markitdownInstalled: false }),
+				'',
+				0,
+			);
+		});
+
+		const { status, resolvedPythonPath } = await checkDependencies('python3', pluginDir);
+
+		expect(status.markitdownInstalled).toBe(true);
+		expect(resolvedPythonPath).toBe(pipxPython);
 	});
 
 	it('falls back to first working Python when none has markitdown', async () => {
@@ -211,24 +359,7 @@ describe('checkDependencies', () => {
 		expect(resolvedPythonPath).toBe('python');
 	});
 
-	it('deduplicates paths (does not try the same path twice)', async () => {
-		// Use a specific absolute path that won't generate fallbacks
-		spawnMock.mockReturnValue(
-			fakeChild(
-				checkOutput({ markitdownInstalled: true, markitdownVersion: '1.0.0' }),
-				'',
-				0,
-			),
-		);
-
-		await checkDependencies('/usr/bin/python3', pluginDir);
-
-		// Absolute path doesn't match 'python' or 'python3' so no fallbacks are generated
-		expect(spawnMock).toHaveBeenCalledTimes(1);
-	});
-
 	it('deduplicates when configured path equals a platform fallback', async () => {
-		// Spy on calls to count unique candidates
 		const paths: string[] = [];
 		spawnMock.mockImplementation((...args: unknown[]) => {
 			paths.push(args[0] as string);
@@ -241,7 +372,6 @@ describe('checkDependencies', () => {
 
 		await checkDependencies('python3', pluginDir);
 
-		// 'python3' is both the configured path and a common fallback — it should appear only once
 		const python3Count = paths.filter(p => p === 'python3').length;
 		expect(python3Count).toBe(1);
 	});
@@ -257,6 +387,7 @@ describe('checkDependencies', () => {
 			Object.defineProperty(process, 'platform', { value: 'win32' });
 			const origEnv = process.env.LOCALAPPDATA;
 			process.env.LOCALAPPDATA = 'C:\\Users\\test\\AppData\\Local';
+			process.env.USERPROFILE = 'C:\\Users\\test';
 
 			const paths: string[] = [];
 			spawnMock.mockImplementation((...args: unknown[]) => {
@@ -266,7 +397,6 @@ describe('checkDependencies', () => {
 
 			await checkDependencies('python', pluginDir);
 
-			// Should include Windows-style paths
 			expect(paths.some(p => p.includes('Programs\\Python'))).toBe(true);
 			expect(paths.some(p => p.includes('WindowsApps'))).toBe(true);
 
@@ -288,11 +418,11 @@ describe('checkDependencies', () => {
 
 			await checkDependencies('python', pluginDir);
 
-			// Should include Homebrew and framework paths
 			expect(paths).toContain('/opt/homebrew/bin/python3');
 			expect(paths).toContain('/usr/local/bin/python3');
 			expect(paths.some(p => p.includes('Python.framework'))).toBe(true);
 			expect(paths).toContain('/usr/bin/python3');
+			expect(paths).toContain('/opt/homebrew/bin/python3.11');
 		});
 
 		it('adds Linux-specific paths when platform is linux', async () => {
@@ -330,7 +460,7 @@ describe('checkDependencies', () => {
 		const { status, resolvedPythonPath } = await checkDependencies('python', pluginDir);
 
 		expect(status.markitdownInstalled).toBe(true);
-		expect(resolvedPythonPath).toBe('python3');
+		expect(resolvedPythonPath).toBe(getPluginVenvPython(pluginDir));
 	});
 
 	it('handles invalid JSON output by skipping the candidate', async () => {

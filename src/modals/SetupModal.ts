@@ -67,7 +67,7 @@ export class SetupModal extends Modal {
 			text: 'Markitdown is not installed. Would you like to install it now?',
 		});
 		el.createEl('p', {
-			text: 'This will install the markitdown Python package using pip.',
+			text: 'This installs markitdown into an isolated plugin virtual environment (safe with Homebrew Python).',
 			cls: 'setting-item-description',
 		});
 
