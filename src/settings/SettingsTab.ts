@@ -386,7 +386,10 @@ export class SettingsTab extends PluginSettingTab {
 		});
 
 		const pipxCmd = 'pipx install "markitdown[all]"';
-		const pipCmd = `${this.plugin.resolvedPythonPath} -m pip install "markitdown[all]"`;
+		const pythonPath = this.plugin.resolvedPythonPath;
+		const quotedPython =
+			pythonPath.includes(' ') ? `"${pythonPath}"` : pythonPath;
+		const pipCmd = `${quotedPython} -m pip install "markitdown[all]"`;
 
 		for (const cmd of [pipxCmd, pipCmd]) {
 			const cmdContainer = content.createDiv('markitdown-pip-command');

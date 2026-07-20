@@ -79,9 +79,24 @@ export function buildPythonCandidates(pythonPath: string, pluginDir: string): st
 	const home = process.env.HOME || process.env.USERPROFILE || '';
 	const isWin = process.platform === 'win32';
 
-	// pipx-managed markitdown (isolated venv; system python3 cannot import it)
-	const pipxHome = process.env.PIPX_HOME || (home ? path.join(home, '.local', 'pipx') : '');
-	if (pipxHome) {
+	// pipx-managed markitdown (isolated venv; system python3 cannot import it).
+	// Probe PIPX_HOME plus legacy (~/.local/pipx) and current platformdirs defaults.
+	const pipxHomes: string[] = [];
+	if (process.env.PIPX_HOME) {
+		pipxHomes.push(process.env.PIPX_HOME);
+	}
+	if (home) {
+		pipxHomes.push(path.join(home, '.local', 'pipx'));
+		if (isWin) {
+			const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+			pipxHomes.push(path.join(localAppData, 'pipx'));
+		} else if (process.platform === 'darwin') {
+			pipxHomes.push(path.join(home, 'Library', 'Application Support', 'pipx'));
+		} else {
+			pipxHomes.push(path.join(home, '.local', 'share', 'pipx'));
+		}
+	}
+	for (const pipxHome of pipxHomes) {
 		if (isWin) {
 			pathsToTry.push(path.join(pipxHome, 'venvs', 'markitdown', 'Scripts', 'python.exe'));
 		} else {
@@ -295,13 +310,16 @@ export async function installPackage(
 			}
 		);
 
-		let lastLine = '';
+		let stdoutBuf = '';
+		let lastCompleteLine = '';
 
 		child.stdout.on('data', (data: Buffer) => {
-			const lines = data.toString().split('\n');
+			stdoutBuf += data.toString();
+			const lines = stdoutBuf.split('\n');
+			stdoutBuf = lines.pop() ?? '';
 			for (const line of lines) {
 				if (line.trim()) {
-					lastLine = line.trim();
+					lastCompleteLine = line.trim();
 					onProgress?.(line.trim());
 				}
 			}
@@ -321,9 +339,14 @@ export async function installPackage(
 		});
 
 		child.on('close', (code: number | null) => {
+			const trailing = stdoutBuf.trim();
+			if (trailing) {
+				lastCompleteLine = trailing;
+				onProgress?.(trailing);
+			}
 			if (code === 0) {
 				try {
-					const result = JSON.parse(lastLine);
+					const result = JSON.parse(lastCompleteLine);
 					resolve(result.success === true);
 				} catch {
 					resolve(true);

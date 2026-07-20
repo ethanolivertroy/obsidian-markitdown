@@ -95,26 +95,35 @@ describe('buildPythonCandidates', () => {
 	const pluginDir = '/plugins/markitdown';
 	const originalPlatform = process.platform;
 	const originalHome = process.env.HOME;
+	const originalUserProfile = process.env.USERPROFILE;
+	const originalLocalAppData = process.env.LOCALAPPDATA;
+	const originalPipxHome = process.env.PIPX_HOME;
 
 	afterEach(() => {
 		Object.defineProperty(process, 'platform', { value: originalPlatform });
-		if (originalHome === undefined) {
-			delete process.env.HOME;
-		} else {
-			process.env.HOME = originalHome;
-		}
-		delete process.env.PIPX_HOME;
+		const restore = (key: string, value: string | undefined) => {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		};
+		restore('HOME', originalHome);
+		restore('USERPROFILE', originalUserProfile);
+		restore('LOCALAPPDATA', originalLocalAppData);
+		restore('PIPX_HOME', originalPipxHome);
 	});
 
 	it('includes plugin venv and pipx python on darwin', () => {
 		Object.defineProperty(process, 'platform', { value: 'darwin' });
 		process.env.HOME = '/Users/test';
+		delete process.env.PIPX_HOME;
 
 		const paths = buildPythonCandidates('python', pluginDir);
 
 		expect(paths[0]).toBe('python');
 		expect(paths).toContain(getPluginVenvPython(pluginDir));
 		expect(paths).toContain('/Users/test/.local/pipx/venvs/markitdown/bin/python');
+		expect(paths).toContain(
+			'/Users/test/Library/Application Support/pipx/venvs/markitdown/bin/python'
+		);
 		expect(paths).toContain('/opt/homebrew/bin/python3');
 		expect(paths).toContain('/opt/homebrew/bin/python3.11');
 		expect(paths).toContain('/opt/homebrew/opt/python@3.11/bin/python3');
@@ -124,6 +133,7 @@ describe('buildPythonCandidates', () => {
 	it('still adds fallbacks when configured path is absolute', () => {
 		Object.defineProperty(process, 'platform', { value: 'darwin' });
 		process.env.HOME = '/Users/test';
+		delete process.env.PIPX_HOME;
 
 		const paths = buildPythonCandidates('/opt/homebrew/bin/python3', pluginDir);
 
@@ -146,6 +156,7 @@ describe('buildPythonCandidates', () => {
 		process.env.HOME = 'C:\\Users\\test';
 		process.env.USERPROFILE = 'C:\\Users\\test';
 		process.env.LOCALAPPDATA = 'C:\\Users\\test\\AppData\\Local';
+		delete process.env.PIPX_HOME;
 
 		const paths = buildPythonCandidates('python', pluginDir);
 

@@ -57,6 +57,7 @@ const INSTALL_PACKAGE_PY = `#!/usr/bin/env python3
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -69,8 +70,9 @@ def run_pip(python, package):
     process = subprocess.Popen(
         [python, "-m", "pip", "install", package],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    for line in process.stdout:
-        print(line, end="", flush=True)
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(line, end="", flush=True)
     process.wait()
     return process.returncode or 0
 
@@ -83,6 +85,7 @@ def ensure_venv(venv_dir, bootstrap_python):
         [bootstrap_python, "-m", "venv", venv_dir],
         capture_output=True, text=True)
     if result.returncode != 0 or not os.path.isfile(py):
+        shutil.rmtree(venv_dir, ignore_errors=True)
         detail = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(
             f"Failed to create virtual environment at {venv_dir}: {detail or f'exit {result.returncode}'}")
