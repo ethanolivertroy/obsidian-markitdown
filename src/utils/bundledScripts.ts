@@ -53,27 +53,57 @@ if __name__ == "__main__":
 `;
 
 const INSTALL_PACKAGE_PY = `#!/usr/bin/env python3
-"""Install a Python package using pip."""
+"""Install a Python package into a plugin-managed virtual environment."""
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
+
+def venv_python(venv_dir):
+    if sys.platform == "win32":
+        return os.path.join(venv_dir, "Scripts", "python.exe")
+    return os.path.join(venv_dir, "bin", "python")
+
+def run_pip(python, package):
+    process = subprocess.Popen(
+        [python, "-m", "pip", "install", package],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(line, end="", flush=True)
+    process.wait()
+    return process.returncode or 0
+
+def ensure_venv(venv_dir, bootstrap_python):
+    py = venv_python(venv_dir)
+    if os.path.isfile(py):
+        return py
+    print(f"Creating virtual environment at {venv_dir}...", flush=True)
+    result = subprocess.run(
+        [bootstrap_python, "-m", "venv", venv_dir],
+        capture_output=True, text=True)
+    if result.returncode != 0 or not os.path.isfile(py):
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(
+            f"Failed to create virtual environment at {venv_dir}: {detail or f'exit {result.returncode}'}")
+    return py
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--package", required=True)
+    parser.add_argument("--venv-dir", required=True)
     args = parser.parse_args()
     try:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "pip", "install", args.package],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        for line in process.stdout:
-            print(line, end="", flush=True)
-        process.wait()
-        if process.returncode == 0:
-            print(json.dumps({"success": True}))
+        py = ensure_venv(args.venv_dir, sys.executable)
+        print(f"Installing {args.package} into {py}...", flush=True)
+        code = run_pip(py, args.package)
+        if code == 0:
+            print(json.dumps({"success": True, "python_path": py}))
         else:
-            print(json.dumps({"success": False, "error": f"pip exited with code {process.returncode}"}))
+            print(json.dumps({"success": False, "error": f"pip exited with code {code}"}))
             sys.exit(1)
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))
@@ -217,11 +247,13 @@ export async function ensurePythonScripts(pluginDir: string): Promise<void> {
 	for (const [filename, content] of Object.entries(SCRIPTS)) {
 		const filePath = path.join(pythonDir, filename);
 		try {
-			await fs.promises.access(filePath);
-			// File exists — skip
+			const existing = await fs.promises.readFile(filePath, 'utf-8');
+			if (existing === content) {
+				continue;
+			}
 		} catch {
-			// File doesn't exist — write it
-			await fs.promises.writeFile(filePath, content, 'utf-8');
+			// File missing — write below
 		}
+		await fs.promises.writeFile(filePath, content, 'utf-8');
 	}
 }

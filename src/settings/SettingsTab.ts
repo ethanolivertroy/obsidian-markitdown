@@ -373,28 +373,38 @@ export class SettingsTab extends PluginSettingTab {
 		const content = details.createDiv('markitdown-troubleshooting-content');
 
 		content.createEl('p', {
-			text: 'Python was found, but the markitdown package is not installed. Run this command to install it:',
-		});
-
-		const cmdContainer = content.createDiv('markitdown-pip-command');
-		const pipCmd = `${this.plugin.resolvedPythonPath} -m pip install "markitdown[all]"`;
-		cmdContainer.createEl('code', { text: pipCmd });
-
-		const copyBtn = cmdContainer.createEl('button', {
-			text: 'Copy',
-			cls: 'markitdown-copy-button',
-		});
-		copyBtn.addEventListener('click', () => {
-			navigator.clipboard.writeText(pipCmd).then(() => {
-				copyBtn.setText('Copied!');
-				setTimeout(() => copyBtn.setText('Copy'), 2000);
-			});
+			text: 'Python was found, but the markitdown package is not importable from that interpreter. Prefer the "Install Markitdown" button below — it creates an isolated plugin venv (avoids Homebrew PEP 668 / externally-managed-environment errors).',
 		});
 
 		content.createEl('p', {
-			text: 'Or use the "Install Markitdown" button below.',
+			text: 'Already installed markitdown another way? The plugin also looks for versioned Homebrew Pythons (e.g. python3.11) and pipx at ~/.local/pipx/venvs/markitdown. Click Refresh status after installing.',
 			cls: 'markitdown-troubleshooting-hint',
 		});
+
+		content.createEl('p', {
+			text: 'Manual alternatives:',
+		});
+
+		const pipxCmd = 'pipx install "markitdown[all]"';
+		const pythonPath = this.plugin.resolvedPythonPath;
+		const quotedPython =
+			pythonPath.includes(' ') ? `"${pythonPath}"` : pythonPath;
+		const pipCmd = `${quotedPython} -m pip install "markitdown[all]"`;
+
+		for (const cmd of [pipxCmd, pipCmd]) {
+			const cmdContainer = content.createDiv('markitdown-pip-command');
+			cmdContainer.createEl('code', { text: cmd });
+			const copyBtn = cmdContainer.createEl('button', {
+				text: 'Copy',
+				cls: 'markitdown-copy-button',
+			});
+			copyBtn.addEventListener('click', () => {
+				navigator.clipboard.writeText(cmd).then(() => {
+					copyBtn.setText('Copied!');
+					setTimeout(() => copyBtn.setText('Copy'), 2000);
+				});
+			});
+		}
 	}
 
 	private renderStatusItem(

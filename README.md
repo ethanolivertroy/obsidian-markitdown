@@ -109,8 +109,8 @@ This plugin acts as a bridge between Obsidian and Microsoft's Markitdown Python 
 
 ## Troubleshooting
 
-- **Python not found**: The plugin searches common paths automatically. If it still can't find Python, set the full path in settings (e.g., `C:\Users\You\AppData\Local\Programs\Python\Python313\python.exe` on Windows or `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3` on macOS). Check the Troubleshooting section in settings for details on which paths were tried.
-- **Markitdown not installed**: Run `pip install markitdown[all]` in your terminal using the same Python shown in settings. Or click the "Install Markitdown" button in the settings panel.
+- **Python not found**: The plugin searches common paths automatically (including Homebrew versioned Pythons and pipx). If it still can't find Python, set the full path in settings (e.g., `C:\Users\You\AppData\Local\Programs\Python\Python313\python.exe` on Windows or `/opt/homebrew/bin/python3.11` on macOS). Check the Troubleshooting section in settings for details on which paths were tried.
+- **Markitdown not installed / shows Not installed on macOS**: Click **Install Markitdown** in settings — this installs into a plugin-local virtualenv and avoids Homebrew's PEP 668 (`externally-managed-environment`) errors. If you already installed via `pipx install markitdown` or into a specific Homebrew Python (e.g. 3.11), click **Refresh status**; the plugin probes pipx and versioned interpreters automatically.
 - **Conversion errors**: Check the console (Ctrl+Shift+I / Cmd+Opt+I) or the conversion history (command palette → "View conversion history")
 - **Missing dependencies**: Some file formats may require additional Python packages. The plugin will try to install these automatically.
 
