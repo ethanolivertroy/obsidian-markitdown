@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFile, MarkdownView, MarkdownFileInfo, Editor } from 'obsidian';
+import { Notice, Plugin, TFile, MarkdownView, MarkdownFileInfo, Editor, Menu } from 'obsidian';
 import * as path from 'path';
 import * as fs from 'fs';
 import {
@@ -63,9 +63,41 @@ export default class MarkitdownPlugin extends Plugin {
 		this._resolvedPythonPath = depCheck.resolvedPythonPath;
 		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
 
-		// Ribbon icon
-		this.addRibbonIcon('file-text', 'Convert to Markdown', () => {
-			this.openConvertModal();
+		// Ribbon icon with dropdown menu
+		this.addRibbonIcon('file-text', 'Markitdown: Convert files and URLs', (evt: MouseEvent) => {
+			const menu = new Menu();
+
+			menu.addItem((item) =>
+				item
+					.setTitle('Convert file to Markdown')
+					.setIcon('file-text')
+					.onClick(() => this.openConvertModal())
+			);
+
+			menu.addItem((item) =>
+				item
+					.setTitle('Convert folder to Markdown')
+					.setIcon('folder')
+					.onClick(() => this.openFolderModal())
+			);
+
+			menu.addItem((item) =>
+				item
+					.setTitle('Convert URL to Markdown')
+					.setIcon('link')
+					.onClick(() => this.openUrlModal())
+			);
+
+			menu.addSeparator();
+
+			menu.addItem((item) =>
+				item
+					.setTitle('View conversion history')
+					.setIcon('clock')
+					.onClick(() => new HistoryModal(this.app, this).open())
+			);
+
+			menu.showAtMouseEvent(evt);
 		});
 
 		// Commands
