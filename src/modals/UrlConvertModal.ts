@@ -60,9 +60,7 @@ export class UrlConvertModal extends Modal {
 				// Derive a filename from the URL
 				const baseName = this.deriveFilename(url);
 				const outputPath = path.join(outputFolder, `${baseName}.md`);
-				const options = this.plugin.buildConversionOptions(outputPath);
-
-				const result = await this.plugin.converter.convertUrl(url, outputPath, options);
+				const result = await this.plugin.convertUrl(url, outputPath);
 
 				if (result.success) {
 					new Notice('URL converted successfully');
