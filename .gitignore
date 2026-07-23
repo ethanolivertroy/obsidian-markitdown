@@ -8,15 +8,17 @@
 # npm
 node_modules
 
-# Don't include the compiled main.js file in the repo.
-# They should be uploaded to GitHub releases instead.
-main.js
+# Compiled main.js is committed so BRAT / git-based installs work.
+# Rebuild with `npm run build` before committing TypeScript changes.
 
 # Exclude sourcemaps
 *.map
 
 # obsidian
 data.json
+
+# Plugin-managed Python venv (created by Install Markitdown)
+.venv/
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store

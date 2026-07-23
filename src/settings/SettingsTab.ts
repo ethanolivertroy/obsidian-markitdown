@@ -101,7 +101,10 @@ export class SettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Extract images')
-			.setDesc('Extract embedded images from PDFs and save as separate files')
+			.setDesc(
+				'Save base64 data-URI images from Markitdown output as separate files. ' +
+				'Does not extract images from PDFs that Markitdown only describes as text.'
+			)
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.imageExtractionEnabled)
 				.onChange(async (value) => {

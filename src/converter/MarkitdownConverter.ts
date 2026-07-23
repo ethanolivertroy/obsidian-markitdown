@@ -72,6 +72,23 @@ export class MarkitdownConverter {
 				};
 			}
 
+			// Apply post-conversion hooks (frontmatter, tags) — same as file convert
+			if (options?.postProcess) {
+				try {
+					const raw = fs.readFileSync(outputPath, 'utf-8');
+					const processed = applyPostConversionHooks(
+						raw,
+						options.postProcess.inputPath,
+						options.postProcess.settings
+					);
+					if (processed !== raw) {
+						fs.writeFileSync(outputPath, processed, 'utf-8');
+					}
+				} catch (hookError: unknown) {
+					console.warn('markitdown: post-conversion hook error:', hookError);
+				}
+			}
+
 			return {
 				success: true,
 				outputPath,

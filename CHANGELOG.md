@@ -1,13 +1,28 @@
 # Changelog
 
-## Unreleased
+## 2.1.1
+
+Patch release: macOS markitdown detection/install fix, URL convert parity, docs cleanup.
 
 ### Fixed
 
-- **Markitdown not detected on macOS** (#16) — discovery now probes versioned Homebrew Pythons (e.g. `python3.11`), pipx venvs (`~/.local/pipx/venvs/markitdown`), and always falls back even when an absolute Python path is configured
+- **Markitdown not detected on macOS** (#16) — discovery now probes versioned Homebrew Pythons (e.g. `python3.11`), pipx venvs (legacy + platformdirs homes), and always falls back even when an absolute Python path is configured
 - **Install button fails under PEP 668** (#16) — "Install Markitdown" creates a plugin-local `.venv` instead of `pip install` into Homebrew's externally-managed Python
 - Obsidian GUI PATH gaps — spawn env prepends `/opt/homebrew/bin`, `/usr/local/bin`, and `~/.local/bin`
 - Bundled Python scripts are refreshed when their contents change (community plugin updates no longer keep stale `install_package.py`)
+- **URL conversions** now record history and apply post-conversion frontmatter/tags like file conversions
+- Docs no longer advertise the reverted conversion-preview modal; image-extraction copy matches actual base64 data-URI behavior
+
+### Added
+
+- Ribbon icon dropdown for file / folder / URL convert and history (#19)
+- GitHub Actions CI workflow (`npm test` + build on PRs and `master`)
+- Release workflow now runs tests before publishing
+
+### Changed
+
+- Python requirement wording aligned to 3.8+
+- `.gitignore` documents that `main.js` is committed; ignores plugin `.venv/`
 
 ## 2.1.0
 
@@ -24,7 +39,6 @@ Feature release with 11 new capabilities and a critical Python detection fix.
 
 - **Drag-and-drop conversion** — drop supported files directly into the editor to auto-convert and insert a wiki-link
 - **URL/YouTube conversion** — new "Convert URL to Markdown" command for YouTube transcripts and web pages
-- **Conversion preview** — preview converted markdown in a modal before saving (Save/Cancel)
 - **Post-conversion hooks** — auto-add YAML frontmatter (source, date, converter) and custom tags
 - **Custom filename template** — configure output names with `{filename}`, `{ext}`, `{date}`, `{datetime}` variables
 - **Recursive folder conversion** — "Include subfolders" toggle preserves directory structure in output

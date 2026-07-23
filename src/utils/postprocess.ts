@@ -23,13 +23,15 @@ function buildFrontmatterFields(
 	const fields: Record<string, string | string[]> = {};
 
 	if (settings.enableAutoFrontmatter) {
-		const filename = path.basename(inputPath);
 		const now = new Date();
 		const yyyy = now.getFullYear();
 		const mm = String(now.getMonth() + 1).padStart(2, '0');
 		const dd = String(now.getDate()).padStart(2, '0');
 
-		fields['source'] = filename;
+		// URL conversions use the full URL; file conversions use the basename
+		fields['source'] = /^https?:\/\//i.test(inputPath)
+			? inputPath
+			: path.basename(inputPath);
 		fields['converted'] = `${yyyy}-${mm}-${dd}`;
 		fields['converter'] = 'markitdown';
 	}

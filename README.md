@@ -20,12 +20,11 @@ Integrate Microsoft's [Markitdown](https://github.com/microsoft/markitdown) tool
 - Convert individual files or entire folders (with recursive subfolder support)
 - **Drag-and-drop** — drop files into the editor to auto-convert
 - **URL/YouTube conversion** — convert web pages and YouTube transcripts to Markdown
-- **Conversion preview** — preview output before saving
 - **Post-conversion hooks** — auto-add YAML frontmatter and tags
 - **Custom filename templates** — use `{filename}`, `{date}`, `{ext}`, `{datetime}` variables
 - **Conversion history** — browse past conversions with success/fail tracking
-- Easy installation of the Markitdown Python package directly from the plugin
-- Smart Python detection across macOS, Windows, and Linux (Homebrew, Framework, AppData paths)
+- Easy installation of the Markitdown Python package directly from the plugin (plugin-local venv)
+- Smart Python detection across macOS, Windows, and Linux (Homebrew versioned Pythons, pipx, Framework, AppData)
 - Optional use of Azure Document Intelligence for improved conversion quality
 - Support for third-party Markitdown plugins
 
@@ -48,21 +47,21 @@ You can get early access to new features by installing beta releases via [BRAT](
 ## Requirements
 
 - Obsidian v0.15.0 or higher
-- Python 3.7 or higher installed on your system
+- Python 3.8 or higher installed on your system
 - Internet connection for initial Markitdown installation
 
 ## Usage
 
 ### Converting a single file
 
-1. Click the "Convert to Markdown with Markitdown" ribbon icon in the left sidebar, or use the command palette to run "Convert file to Markdown with Markitdown"
+1. Click the Markitdown ribbon icon and choose **Convert file to Markdown**, or use the command palette
 2. Select the file you want to convert
 3. Click the "Convert" button
 4. The converted Markdown file will be saved in your specified output folder and automatically opened
 
 ### Converting multiple files in a folder
 
-1. Use the command palette to run "Convert folder to Markdown"
+1. Use the ribbon menu or command palette to run "Convert folder to Markdown"
 2. Select the folder containing the files you want to convert
 3. Toggle "Include subfolders" for recursive conversion
 4. Check the file types you want to include
@@ -89,7 +88,7 @@ The plugin settings can be found in the Obsidian settings panel under "Markitdow
 - **Python Path**: Path to your Python executable — the plugin auto-detects common locations if left as "python"
 - **Output Folder**: Where converted files are saved (relative to vault root, default: "markitdown-output")
 - **Output Filename Template**: Customize output names with `{filename}`, `{ext}`, `{date}`, `{datetime}`
-- **Extract Images**: Extract embedded images from PDFs to separate files
+- **Extract Images**: Save base64 data-URI images from Markitdown output as separate files (not a full PDF image extractor)
 - **Recursive Folder Conversion**: Include subfolders when converting folders
 - **Drag and Drop**: Auto-convert supported files dropped into the editor
 - **Context Menu**: Right-click "Convert to Markdown" in the file explorer
@@ -123,7 +122,8 @@ This plugin acts as a bridge between Obsidian and Microsoft's Markitdown Python 
 
 ## Manually installing the plugin
 
-- Copy over `main.js`, `styles.css`, `manifest.json`, and the `python/` directory to your vault `VaultFolder/.obsidian/plugins/markitdown/`
+- Copy over `main.js`, `styles.css`, and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/markitdown/`
+- The plugin writes its Python helper scripts into a `python/` folder on first load (no need to copy them)
 
 ## Credits
 
