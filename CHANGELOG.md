@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Slow plugin startup** (#14) — Python/markitdown discovery no longer blocks Obsidian `onload`; it runs in the background and caches the last-good interpreter for a fast probe on the next launch. Absolute candidate paths that do not exist are skipped (no spawn ENOENT).
+
 ## 2.1.1
 
 Patch release: macOS markitdown detection/install fix, URL convert parity, docs cleanup.

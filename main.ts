@@ -40,7 +40,10 @@ export default class MarkitdownPlugin extends Plugin {
 	};
 	converter: MarkitdownConverter = new MarkitdownConverter('python', '.');
 	pythonDiscoveryLog: TriedPath[] = [];
+	/** False until the first (possibly background) dependency check finishes. */
+	dependenciesReady = false;
 	private _resolvedPythonPath = 'python';
+	private discoveryPromise: Promise<void> | null = null;
 
 	/** The Python path actually used after discovery/fallback resolution. */
 	get resolvedPythonPath(): string {
@@ -56,12 +59,13 @@ export default class MarkitdownPlugin extends Plugin {
 		// only include main.js, manifest.json, and styles.css — no python/ dir)
 		await ensurePythonScripts(pluginDir);
 
-		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
-		this.dependencyStatus = depCheck.status;
-		this.pythonDiscoveryLog = depCheck.triedPaths;
-		// Use the resolved python path (handles python→python3 fallback)
-		this._resolvedPythonPath = depCheck.resolvedPythonPath;
+		// Seed converter with cached path when available; full discovery runs
+		// in the background so Obsidian startup is not blocked by spawn probes (#14).
+		if (this.settings.cachedPythonPath.trim()) {
+			this._resolvedPythonPath = this.settings.cachedPythonPath.trim();
+		}
 		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
+		this.startBackgroundDiscovery();
 
 		// Ribbon icon with dropdown menu
 		this.addRibbonIcon('file-text', 'Markitdown: Convert files and URLs', (evt: MouseEvent) => {
@@ -143,30 +147,95 @@ export default class MarkitdownPlugin extends Plugin {
 		// registerEvent handles cleanup automatically
 	}
 
-	/** Open file conversion modal, or setup modal if not installed. */
-	private openConvertModal() {
+	/**
+	 * Kick off (or reuse) background Python/markitdown discovery.
+	 * Does not block the caller — use ensureDependenciesReady() when results are needed.
+	 */
+	startBackgroundDiscovery(): void {
+		if (this.discoveryPromise) return;
+		this.dependenciesReady = false;
+		this.discoveryPromise = this.runDependencyDiscovery()
+			.catch((err) => {
+				console.error('markitdown: dependency discovery failed:', err);
+			})
+			.finally(() => {
+				this.dependenciesReady = true;
+				this.discoveryPromise = null;
+			});
+	}
+
+	/** Wait until the current discovery pass finishes (no-op if already ready). */
+	async ensureDependenciesReady(): Promise<void> {
+		if (this.dependenciesReady && !this.discoveryPromise) return;
+		if (!this.discoveryPromise) {
+			this.startBackgroundDiscovery();
+		}
+		await this.discoveryPromise;
+	}
+
+	private async runDependencyDiscovery(): Promise<void> {
+		const pluginDir = this.getPluginDir();
+		const preferred = this.settings.cachedPythonPath.trim()
+			? [this.settings.cachedPythonPath.trim()]
+			: [];
+		const depCheck = await checkDependencies(
+			this.settings.pythonPath,
+			pluginDir,
+			preferred
+		);
+		this.dependencyStatus = depCheck.status;
+		this.pythonDiscoveryLog = depCheck.triedPaths;
+		this._resolvedPythonPath = depCheck.resolvedPythonPath;
+		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
+
+		if (depCheck.status.markitdownInstalled) {
+			if (this.settings.cachedPythonPath !== depCheck.resolvedPythonPath) {
+				this.settings.cachedPythonPath = depCheck.resolvedPythonPath;
+				await this.saveSettings();
+			}
+		}
+	}
+
+	/** Wait for discovery; open setup if markitdown is missing. Returns true when ready to convert. */
+	private async ensureReadyForConvert(): Promise<boolean> {
+		if (!this.dependenciesReady) {
+			new Notice('Checking Python environment…');
+		}
+		await this.ensureDependenciesReady();
 		if (!this.dependencyStatus.markitdownInstalled) {
 			new SetupModal(this.app, this).open();
-			return;
+			return false;
 		}
+		return true;
+	}
+
+	/** Open file conversion modal, or setup modal if not installed. */
+	private openConvertModal() {
+		void this.openConvertModalAsync();
+	}
+
+	private async openConvertModalAsync() {
+		if (!(await this.ensureReadyForConvert())) return;
 		new FileConvertModal(this.app, this).open();
 	}
 
 	/** Open folder conversion modal, or setup modal if not installed. */
 	private openFolderModal() {
-		if (!this.dependencyStatus.markitdownInstalled) {
-			new SetupModal(this.app, this).open();
-			return;
-		}
+		void this.openFolderModalAsync();
+	}
+
+	private async openFolderModalAsync() {
+		if (!(await this.ensureReadyForConvert())) return;
 		new FolderConvertModal(this.app, this).open();
 	}
 
 	/** Open URL conversion modal, or setup modal if not installed. */
 	private openUrlModal() {
-		if (!this.dependencyStatus.markitdownInstalled) {
-			new SetupModal(this.app, this).open();
-			return;
-		}
+		void this.openUrlModalAsync();
+	}
+
+	private async openUrlModalAsync() {
+		if (!(await this.ensureReadyForConvert())) return;
 		new UrlConvertModal(this.app, this).open();
 	}
 
@@ -227,10 +296,7 @@ export default class MarkitdownPlugin extends Plugin {
 			return;
 		}
 
-		if (!this.dependencyStatus.markitdownInstalled) {
-			new SetupModal(this.app, this).open();
-			return;
-		}
+		if (!(await this.ensureReadyForConvert())) return;
 
 		new Notice(`Converting dropped file: ${file.name}...`);
 
@@ -274,10 +340,7 @@ export default class MarkitdownPlugin extends Plugin {
 			return;
 		}
 
-		if (!this.dependencyStatus.markitdownInstalled) {
-			new SetupModal(this.app, this).open();
-			return;
-		}
+		if (!(await this.ensureReadyForConvert())) return;
 
 		const inputPath = path.join(vaultPath, file.path);
 		const outputFolder = resolveOutputFolder(vaultPath, this.settings.outputPath);
@@ -435,6 +498,7 @@ export default class MarkitdownPlugin extends Plugin {
 
 	/** Install markitdown package using the resolved Python path. */
 	async installMarkitdown(onProgress?: (line: string) => void): Promise<boolean> {
+		await this.ensureDependenciesReady();
 		const pluginDir = this.getPluginDir();
 		const success = await installPackage(
 			this._resolvedPythonPath,
@@ -444,18 +508,27 @@ export default class MarkitdownPlugin extends Plugin {
 		);
 		if (success) {
 			this.dependencyStatus.markitdownInstalled = true;
+			await this.refreshDependencies();
 		}
 		return success;
 	}
 
-	/** Refresh dependency status and resolved Python path. */
+	/** Refresh dependency status and resolved Python path (awaits a full discovery pass). */
 	async refreshDependencies(): Promise<void> {
-		const pluginDir = this.getPluginDir();
-		const depCheck = await checkDependencies(this.settings.pythonPath, pluginDir);
-		this.dependencyStatus = depCheck.status;
-		this.pythonDiscoveryLog = depCheck.triedPaths;
-		this._resolvedPythonPath = depCheck.resolvedPythonPath;
-		this.converter = new MarkitdownConverter(this.resolvedPythonPath, pluginDir);
+		// Coalesce with any in-flight background pass, then run a fresh check.
+		if (this.discoveryPromise) {
+			await this.discoveryPromise;
+		}
+		this.dependenciesReady = false;
+		this.discoveryPromise = this.runDependencyDiscovery()
+			.catch((err) => {
+				console.error('markitdown: dependency refresh failed:', err);
+			})
+			.finally(() => {
+				this.dependenciesReady = true;
+				this.discoveryPromise = null;
+			});
+		await this.discoveryPromise;
 	}
 
 	async loadSettings() {

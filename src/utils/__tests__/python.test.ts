@@ -2,10 +2,15 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import type { ChildProcess } from 'child_process';
 
-// ---- mock child_process.spawn before importing the module under test ----
+// ---- mock child_process.spawn + fs.existsSync before importing under test ----
 const spawnMock = jest.fn();
+const existsSyncMock = jest.fn(() => true);
 jest.mock('child_process', () => ({
 	spawn: spawnMock,
+}));
+jest.mock('fs', () => ({
+	...jest.requireActual<typeof import('fs')>('fs'),
+	existsSync: (...args: unknown[]) => existsSyncMock(...args),
 }));
 
 import {
@@ -15,7 +20,13 @@ import {
 	getPluginVenvPython,
 	getPythonScriptPath,
 	runPythonScript,
+	shouldProbeCandidate,
 } from '../python';
+
+beforeEach(() => {
+	existsSyncMock.mockReset();
+	existsSyncMock.mockReturnValue(true);
+});
 
 // Helper: create a fake ChildProcess that emits events
 function fakeChild(
@@ -166,6 +177,30 @@ describe('buildPythonCandidates', () => {
 		);
 		expect(paths.some(p => p.includes('Programs\\Python\\Python311'))).toBe(true);
 	});
+
+	it('places preferredPaths right after the configured path', () => {
+		const paths = buildPythonCandidates('python', pluginDir, ['/cached/python']);
+		expect(paths[0]).toBe('python');
+		expect(paths[1]).toBe('/cached/python');
+		expect(paths[2]).toBe(getPluginVenvPython(pluginDir));
+	});
+});
+
+describe('shouldProbeCandidate', () => {
+	it('always probes bare names', () => {
+		existsSyncMock.mockReturnValue(false);
+		expect(shouldProbeCandidate('python3')).toBe(true);
+	});
+
+	it('skips missing absolute paths', () => {
+		existsSyncMock.mockReturnValue(false);
+		expect(shouldProbeCandidate('/missing/python3')).toBe(false);
+	});
+
+	it('probes absolute paths that exist', () => {
+		existsSyncMock.mockReturnValue(true);
+		expect(shouldProbeCandidate('/usr/bin/python3')).toBe(true);
+	});
 });
 
 // ---------- runPythonScript ----------
@@ -250,6 +285,55 @@ describe('checkDependencies', () => {
 		expect(resolvedPythonPath).toBe('/usr/bin/python3');
 		// Should have spawned only once (no fallback needed)
 		expect(spawnMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('tries preferredPaths before platform fallbacks', async () => {
+		const paths: string[] = [];
+		spawnMock.mockImplementation((...args: unknown[]) => {
+			paths.push(args[0] as string);
+			if ((args[0] as string) === '/cached/with-markitdown') {
+				return fakeChild(
+					checkOutput({ markitdownInstalled: true, markitdownVersion: '0.1.6' }),
+					'',
+					0,
+				);
+			}
+			return fakeChild(checkOutput({ markitdownInstalled: false }), '', 0);
+		});
+
+		const { resolvedPythonPath } = await checkDependencies('python', pluginDir, [
+			'/cached/with-markitdown',
+		]);
+
+		expect(paths[0]).toBe('python');
+		expect(paths[1]).toBe('/cached/with-markitdown');
+		expect(resolvedPythonPath).toBe('/cached/with-markitdown');
+		expect(spawnMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('skips absolute candidates that do not exist on disk', async () => {
+		existsSyncMock.mockImplementation((p: unknown) => String(p) === '/exists/python3');
+
+		spawnMock.mockReturnValue(
+			fakeChild(
+				checkOutput({ markitdownInstalled: true, markitdownVersion: '1.0.0' }),
+				'',
+				0,
+			),
+		);
+
+		const { resolvedPythonPath, triedPaths } = await checkDependencies(
+			'/missing/python3',
+			pluginDir,
+			['/exists/python3'],
+		);
+
+		expect(resolvedPythonPath).toBe('/exists/python3');
+		expect(triedPaths.some(t => t.path === '/missing/python3' && t.error.includes('skipped'))).toBe(
+			true
+		);
+		expect(spawnMock).toHaveBeenCalledTimes(1);
+		expect(spawnMock.mock.calls[0][0]).toBe('/exists/python3');
 	});
 
 	it('tries fallback paths when first Python lacks markitdown, prefers one with markitdown', async () => {

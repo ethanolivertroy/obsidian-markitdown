@@ -15,6 +15,8 @@ export interface PluginArgEntry {
 
 export interface MarkitdownSettings {
 	pythonPath: string;
+	/** Last Python that successfully imported markitdown — tried early on next launch. */
+	cachedPythonPath: string;
 	enablePlugins: boolean;
 	pluginArgs: PluginArgEntry[];
 	docintelEndpoint: string;
@@ -33,6 +35,7 @@ export interface MarkitdownSettings {
 
 export const DEFAULT_SETTINGS: MarkitdownSettings = {
 	pythonPath: 'python',
+	cachedPythonPath: '',
 	enablePlugins: false,
 	pluginArgs: [],
 	docintelEndpoint: '',
