@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 2.1.2
+
+Patch release: faster Obsidian plugin startup.
 
 ### Fixed
 
