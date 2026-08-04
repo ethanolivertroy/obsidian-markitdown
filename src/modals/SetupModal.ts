@@ -10,9 +10,22 @@ export class SetupModal extends Modal {
 	}
 
 	onOpen() {
+		void this.render();
+	}
+
+	private async render() {
 		const { contentEl } = this;
+		contentEl.empty();
 		contentEl.addClass('markitdown-modal');
 		contentEl.createEl('h2', { text: 'Markitdown setup' });
+
+		if (!this.plugin.dependenciesReady) {
+			contentEl.createEl('p', { text: 'Checking Python environment…' });
+			await this.plugin.ensureDependenciesReady();
+			if (!this.contentEl.isConnected) return;
+			await this.render();
+			return;
+		}
 
 		if (!this.plugin.dependencyStatus.pythonInstalled) {
 			this.showPythonNotFound(contentEl);

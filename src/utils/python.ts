@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import { DependencyStatus, TriedPath } from '../types/settings';
 
@@ -62,15 +63,43 @@ export function getPluginVenvPython(pluginDir: string): string {
 }
 
 /**
+ * True when we should attempt to spawn this candidate.
+ * Bare names (PATH lookup) are always tried; absolute paths are skipped if missing
+ * to avoid slow ENOENT spawns across dozens of versioned install locations.
+ */
+export function shouldProbeCandidate(candidate: string): boolean {
+	const trimmed = candidate.trim();
+	if (!trimmed) return false;
+	if (!path.isAbsolute(trimmed)) return true;
+	try {
+		return fs.existsSync(trimmed);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Build the ordered list of Python executables to probe for markitdown.
  * Always includes platform fallbacks (not only when the setting is `python`/`python3`)
  * so versioned Homebrew installs and pipx venvs are found under Obsidian's limited PATH.
+ *
+ * @param preferredPaths optional hot paths (e.g. cached last-good interpreter) tried
+ *   immediately after the configured path.
  */
-export function buildPythonCandidates(pythonPath: string, pluginDir: string): string[] {
+export function buildPythonCandidates(
+	pythonPath: string,
+	pluginDir: string,
+	preferredPaths: string[] = []
+): string[] {
 	const trimmed = pythonPath.trim();
 	const pathsToTry: string[] = [];
 	if (trimmed) {
 		pathsToTry.push(trimmed);
+	}
+
+	for (const preferred of preferredPaths) {
+		const p = preferred.trim();
+		if (p) pathsToTry.push(p);
 	}
 
 	// Prefer an existing plugin-managed venv (created by Install Markitdown)
@@ -212,7 +241,8 @@ export function getPythonScriptPath(scriptName: string, pluginDir: string): stri
  */
 export async function checkDependencies(
 	pythonPath: string,
-	pluginDir: string
+	pluginDir: string,
+	preferredPaths: string[] = []
 ): Promise<{ status: DependencyStatus; resolvedPythonPath: string; triedPaths: TriedPath[] }> {
 	const status: DependencyStatus = {
 		pythonInstalled: false,
@@ -231,13 +261,18 @@ export async function checkDependencies(
 	}
 
 	const scriptPath = getPythonScriptPath('check_install.py', pluginDir);
-	const uniquePaths = buildPythonCandidates(trimmed, pluginDir);
+	const uniquePaths = buildPythonCandidates(trimmed, pluginDir, preferredPaths);
 
 	// Try each candidate; prefer the first one that has markitdown installed.
 	// If none has markitdown, fall back to the first working Python.
 	let firstWorkingPython: { status: DependencyStatus; resolvedPythonPath: string } | null = null;
 
 	for (const tryPath of uniquePaths) {
+		if (!shouldProbeCandidate(tryPath)) {
+			triedPaths.push({ path: tryPath, error: 'Path does not exist (skipped)' });
+			continue;
+		}
+
 		try {
 			const result = await runPythonScript(tryPath, scriptPath, ['--check', 'all']);
 

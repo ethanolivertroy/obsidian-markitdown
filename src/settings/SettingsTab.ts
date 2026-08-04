@@ -243,41 +243,56 @@ export class SettingsTab extends PluginSettingTab {
 
 		const statusContainer = containerEl.createDiv('markitdown-status-container');
 		const dep = this.plugin.dependencyStatus;
+		const checking = !this.plugin.dependenciesReady;
 
-		// Python status
-		this.renderStatusItem(
-			statusContainer,
-			'Python',
-			dep.pythonInstalled,
-			dep.pythonVersion ? `v${dep.pythonVersion}` : undefined
-		);
+		if (checking) {
+			statusContainer.createDiv('markitdown-resolved-path-hint').setText(
+				'Checking Python environment…'
+			);
+			// Keep the panel live: redraw once background discovery finishes
+			void this.plugin.ensureDependenciesReady().then(() => {
+				if (this.containerEl.isConnected) {
+					this.display();
+				}
+			});
+		}
 
-		// Markitdown status
-		this.renderStatusItem(
-			statusContainer,
-			'Markitdown',
-			dep.markitdownInstalled,
-			dep.markitdownVersion ? `v${dep.markitdownVersion}` : undefined
-		);
+		if (checking) {
+			this.renderCheckingStatusItem(statusContainer, 'Python');
+			this.renderCheckingStatusItem(statusContainer, 'Markitdown');
+		} else {
+			this.renderStatusItem(
+				statusContainer,
+				'Python',
+				dep.pythonInstalled,
+				dep.pythonVersion ? `v${dep.pythonVersion}` : undefined
+			);
+			this.renderStatusItem(
+				statusContainer,
+				'Markitdown',
+				dep.markitdownInstalled,
+				dep.markitdownVersion ? `v${dep.markitdownVersion}` : undefined
+			);
+		}
 
 		// Resolved path hint (when Python is found)
-		if (dep.pythonInstalled) {
+		if (!checking && dep.pythonInstalled) {
 			const hint = statusContainer.createDiv('markitdown-resolved-path-hint');
 			hint.setText(`Using: ${this.plugin.resolvedPythonPath}`);
 		}
 
 		// ── Troubleshooting: Python NOT installed ──
-		if (!dep.pythonInstalled) {
+		if (!checking && !dep.pythonInstalled) {
 			this.renderPythonTroubleshooting(containerEl);
 		}
 
 		// ── Troubleshooting: Python installed but markitdown missing ──
-		if (dep.pythonInstalled && !dep.markitdownInstalled) {
+		if (!checking && dep.pythonInstalled && !dep.markitdownInstalled) {
 			this.renderMarkitdownTroubleshooting(containerEl);
 		}
 
 		// Install button (when Python exists but markitdown doesn't)
-		if (!dep.markitdownInstalled && dep.pythonInstalled) {
+		if (!checking && !dep.markitdownInstalled && dep.pythonInstalled) {
 			const installBtn = containerEl.createEl('button', {
 				text: 'Install Markitdown',
 				cls: 'markitdown-install-button',
@@ -408,6 +423,13 @@ export class SettingsTab extends PluginSettingTab {
 				});
 			});
 		}
+	}
+
+	private renderCheckingStatusItem(container: HTMLElement, label: string) {
+		const item = container.createDiv('markitdown-status-item');
+		const icon = item.createSpan('markitdown-status-icon');
+		icon.setText('\u2026');
+		item.createSpan().setText(`${label}: Checking\u2026`);
 	}
 
 	private renderStatusItem(
